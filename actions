@@ -1,0 +1,12 @@
+execute_function: アクションを実行する。
+go_to_location: 指定された場所に移動する。
+ask_location: 物の場所を尋ねる。
+find_concrete_name_objects: 具体的な名前のオブジェクトを探す。
+count_concrete_name_objects: 具体的な名前のオブジェクトの数を数える。
+find_person: 人を探す。
+detect_person_pose: 人のポーズを検出する。
+pick: 物を拾う。
+hand_over: 物を手渡す。
+
+
+

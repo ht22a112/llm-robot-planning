@@ -1,10 +1,12 @@
 from typing import Union, Dict, Literal, Optional
 from abc import ABC, abstractmethod
 import json
-import logging # TODO: 後で削除
+
+import logging
+logger = logging.getLogger("GenAI")
 
 import google.generativeai as genai
-#from google.generativeai import GenerationConfig
+from google.generativeai import GenerationConfig
 
 from utils.json import fix_and_parse_json
 
@@ -20,12 +22,15 @@ class OpenAIWrapper(GenAIWrapper):
 class GeminiWrapper(GenAIWrapper):
     def __init__(self, api_key, model_name, *args, **kwargs):
         genai.configure(api_key=api_key, *args, **kwargs)
-        self.model = genai.GenerativeModel(model_name)
+        #TODO: テスト用なのであとで消す
+        config = GenerationConfig(temperature=0.0)
+        self.model = genai.GenerativeModel(model_name, generation_config=config)
         
     def generate_content(self, prompt, *args, **kwargs) -> str:
         response = self.model.generate_content(prompt, *args, **kwargs)
         return response.text
-    
+
+
 class UnifiedAIRequestHandler:
     def __init__(
         self,
@@ -44,7 +49,7 @@ class UnifiedAIRequestHandler:
                 s = ""
                 for m in genai.list_models():
                     s += m.name + "\n" 
-                logging.debug(s)
+                logger.debug(s)
             elif service_name == "openai":
                 raise NotImplementedError("openai is not supported yet")
             else:
@@ -111,7 +116,7 @@ class UnifiedAIRequestHandler:
     def _get_model(self, model_name, supported_generation_methods) -> GenAIWrapper:
         # TODO: 後で実装
         if not self._models:
-            logging.debug("initializing models: 'models/gemini-1.0-pro-latest'") # TODO: 後で削除
+            logger.debug("initializing models: 'models/gemini-1.0-pro-latest'") # TODO: 後で削除
             self._models["models/gemini-1.0-pro-latest"] = GeminiWrapper(self.api_keys["google"], "models/gemini-1.0-pro-latest")
         return self._models["models/gemini-1.0-pro-latest"]
 

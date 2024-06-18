@@ -1,13 +1,18 @@
 from typing import Optional
 
 class Task():
-    def __init__(self, content: str):
-        self.content: str = content
+    def __init__(
+        self, 
+        description: str,
+        required_info: list[str] = [],
+    ):
+        self.description: str = description
+        self.required_info = required_info
         self.func_dict = {}
         #self.done = False
         
     def __str__(self):
-        return str(self.content)
+        return f"[description:{self.description}, required_info:{self.required_info}]"
     def __repr__(self):
         return self.__str__()
         
@@ -27,7 +32,7 @@ class DatabaseManager():
         self.data = {}
         self.current_job: Optional[Record] = None
         
-    def new_job(self, instruction: str, tasks: list[Task]):
+    def start_new_job(self, instruction: str, tasks: list[Task]):
         """
         Args:
             instruction: str ユーザーからの指示（最初にロボットに与える命令）

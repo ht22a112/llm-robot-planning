@@ -12,19 +12,24 @@ import logging
 # Logger
 LLM_logger = logging.getLogger("LLMRobotPlanner")
 LLM_logger.setLevel(logging.DEBUG)
+LLM_command_logger = logging.getLogger("LLMCommand")
+LLM_command_logger.setLevel(logging.DEBUG)
 
 class LogHandler(logging.Handler):
     def __init__(self, log_display: LLMRobotPlannerInfoView):
         super().__init__()
         self.log_display = log_display
         
-        formatter = logging.Formatter('[%(levelname)s]\n%(message)s')
+        formatter = logging.Formatter('%(message)s')
         self.setFormatter(formatter)
-        self.setLevel(logging.INFO)
+        self.setLevel(logging.DEBUG)
 
     def emit(self, record):
         log_entry = self.format(record)
-        self.log_display.append(log_entry)
+        if record.name == "LLMRobotPlanner" and record.levelno >= logging.INFO:
+            self.log_display.append_left(log_entry)
+        elif record.name == "LLMCommand":
+            self.log_display.append_right(log_entry)
         
 # LLM Robot Planner 実行        
 def process_llm_robot_planner():
@@ -64,6 +69,7 @@ def main(page: Page):
     planner_info = LLMRobotPlannerInfoView(page=page)
     gui_handler = LogHandler(planner_info)
     LLM_logger.addHandler(gui_handler)
+    LLM_command_logger.addHandler(gui_handler)
     page.add(planner_info)
     
 app(target=main)

@@ -1,14 +1,16 @@
-from typing import Optional
+from typing import Optional, List
 
 class Task():
     def __init__(
         self, 
         description: str,
+        detail: str,
         required_info: list[str] = [],
     ):
         self.description: str = description
+        self.detail: str = detail
         self.required_info = required_info
-        self.func_dict = {}
+        self.commands = {}
         #self.done = False
         
     def __str__(self):
@@ -16,7 +18,7 @@ class Task():
     def __repr__(self):
         return self.__str__()
         
-class Record():
+class JobRecord():
     def __init__(
         self,
         instruction: str,
@@ -26,11 +28,15 @@ class Record():
         self.tasks: list[Task] = tasks
 
 
-
+class Database():
+    def __init__(self):
+        self.records = {}
+        self.current_job: Optional[JobRecord] = None
+        
 class DatabaseManager():
     def __init__(self):
-        self.data = {}
-        self.current_job: Optional[Record] = None
+        self._db = Database()
+        
         
     def start_new_job(self, instruction: str, tasks: list[Task]):
         """
@@ -39,14 +45,14 @@ class DatabaseManager():
         Returns:
             None
         """
-        self.current_job = Record(
+        self._db.current_job = JobRecord(
             instruction=instruction,
             tasks=tasks
         )
         
-        
-        
-        
+    def get_current_job(self) -> JobRecord | None:
+        return self._db.current_job
+
         
         
         

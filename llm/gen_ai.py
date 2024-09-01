@@ -1,4 +1,4 @@
-from typing import Union, Dict, Literal, Optional
+from typing import Union, Dict, Literal, Optional, overload
 from abc import ABC, abstractmethod
 import json
 
@@ -8,7 +8,9 @@ logger = logging.getLogger("GenAI")
 import google.generativeai as genai
 from google.generativeai import GenerationConfig
 
-from utils.json import fix_and_parse_json
+import ollama
+
+from utils.json_utils import fix_and_parse_json
 
 
 class GenAIWrapper(ABC):
@@ -29,6 +31,10 @@ class GeminiWrapper(GenAIWrapper):
     def generate_content(self, prompt, *args, **kwargs) -> str:
         response = self.model.generate_content(prompt, *args, **kwargs)
         return response.text
+
+class OllamaWrapper(GenAIWrapper):
+    def __init__(self) -> None:
+        pass
 
 
 class UnifiedAIRequestHandler:
@@ -58,27 +64,59 @@ class UnifiedAIRequestHandler:
     def generate_content(self, prompt, model_name: Optional[str]=None, *args, **kwargs) -> str:
         return self._get_model(model_name, "generate_content").generate_content(prompt, *args, **kwargs)
     
-    def generete_content_v2(
+    @overload
+    def generate_content_v2(
         self, 
-        prompt, 
+        prompt: str, 
+        response_type: None = None,
+        convert_type: None = None,
         model_name: Optional[str] = None,
+        *args,
+        **kwargs
+    ) -> str: ...
+
+    @overload
+    def generate_content_v2(
+        self, 
+        prompt: str, 
+        response_type: Literal["json"] = "json",
+        convert_type: Literal["dict"] = "dict",
+        model_name: Optional[str] = None,
+        *args,
+        **kwargs
+    ) -> dict: ...
+
+    @overload
+    def generate_content_v2(
+        self, 
+        prompt: str, 
+        response_type: Literal["json"] = "json",
+        convert_type: Literal["list"] = "list",
+        model_name: Optional[str] = None,
+        *args,
+        **kwargs
+    ) -> list: ...
+    
+    def generate_content_v2(
+        self, 
+        prompt: str, 
         response_type: Optional[Literal["json", "any"]] = None,
         convert_type: Optional[Literal["dict", "list", "none"]] = None,
+        model_name: Optional[str] = None,
         *args,
-        **kwargs,
-    ) -> str | list | dict:
+        **kwargs
+    ) -> Union[str, list, dict]:
         """
-        
+        生成コンテンツを取得し、必要に応じて変換します。
+
         Args:
-            prompt: str 
-            model_name: None | str  生成に使用するモデル
-            
-            :生成結果を特定のpythonオブジェクトに変換する場合:
-            response_type: None | "json" | "any"  生成結果に予想される文字列の形式
-            convert_type: None | "dict" | "list" | "none"  変換後の形式
-        
-        returns:
-            generate_content: str | list | dict  生成結果
+            prompt: 生成のためのプロンプト
+            model_name: 生成に使用するモデル（オプション）
+            response_type: 予想される生成結果の形式 ("json" または "any")
+            convert_type: 変換後の形式 ("dict", "list", または "none")
+
+        Returns:
+            生成結果（文字列、リスト、または辞書）
         """
         
         response_text = self.generate_content(prompt, model_name, *args, **kwargs)
@@ -88,7 +126,7 @@ class UnifiedAIRequestHandler:
                 # convert 
                 if response_type.lower() == "json":
                     try:
-                        py_obj = json.dumps(response_text)
+                        py_obj = json.loads(response_text)
                     except json.JSONDecodeError:
                         py_obj = fix_and_parse_json(response_text)
                 else:
@@ -98,7 +136,7 @@ class UnifiedAIRequestHandler:
                     if isinstance(py_obj, dict):
                         pass
                     else:
-                        raise ValueError()
+                        raise ValueError(f"response type: '{type(py_obj)}' is not dict\n{response_text}")
                 elif convert_type.lower() == "list":
                     if isinstance(convert_type, list):
                         pass
@@ -115,8 +153,9 @@ class UnifiedAIRequestHandler:
 
     def _get_model(self, model_name, supported_generation_methods) -> GenAIWrapper:
         # TODO: 後で実装
+        model_name = "models/gemini-1.5-flash"
         if not self._models:
-            logger.debug("initializing models: 'models/gemini-1.0-pro-latest'") # TODO: 後で削除
-            self._models["models/gemini-1.0-pro-latest"] = GeminiWrapper(self.api_keys["google"], "models/gemini-1.0-pro-latest")
-        return self._models["models/gemini-1.0-pro-latest"]
+            logger.debug(f"initializing models: '{model_name}'") # TODO: 後で削除
+            self._models[model_name] = GeminiWrapper(self.api_keys["google"], model_name)
+        return self._models[model_name]
 

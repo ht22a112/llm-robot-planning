@@ -3,7 +3,7 @@ from knowledge.knowledge_base import KnowledgeBase
 class ObjectLocationKnowledge(KnowledgeBase):
     def __init__(self):
         super().__init__(
-            name="オブジェクトの位置情報"
+            name="オブジェクト（物、物体）の位置情報"
         )
     
     def get_info(self) -> list[str]:

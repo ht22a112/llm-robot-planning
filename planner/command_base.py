@@ -6,7 +6,7 @@ import inspect
 import logging
 logger = logging.getLogger("LLMCommand")
 
-
+    
 class CommandBase(ABC):
     def __init__(
         self, 
@@ -45,7 +45,7 @@ class CommandBase(ABC):
         
         if self.__execute_required_known_args:
             required_args_str = ", ".join(f"<{arg}>" for arg in self.__execute_required_known_args)
-            required_args_str += "は既知の内容（ロボットが知っている内容)から選択すること。知らない場合はerrorコマンドを出力すること"
+            required_args_str += "は既知の内容（ロボットが知っている内容)から同じ単語を選択すること。知らない場合はerrorコマンドを出力する"
         else:
             required_args_str = ""
             
@@ -57,7 +57,7 @@ class CommandBase(ABC):
     
     # TODO: 仮実装なので後々仕様や命名の変更を行う
     def get_knowledge(self, knowledge_name, target):
-        
+        pass
     
     @abstractmethod
     def execute(self, *args, **kwargs) -> CommandExecutionResult:

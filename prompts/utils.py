@@ -20,6 +20,8 @@ def get_prompt(
     """
     if prompt_name == "split_instruction":
         prompt = split_instruction_prompt
+    elif prompt_name == "split_task":
+        prompt = split_task_prompt
     else:
         raise ValueError(f"prompt_name {prompt_name} is not supported")
     

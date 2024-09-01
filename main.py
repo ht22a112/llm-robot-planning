@@ -1,8 +1,8 @@
 import logging
 logging.basicConfig(level=logging.DEBUG, format='[%(levelname)s] %(message)s')
 
-from llm.llm_robot_planner import LLMRobotPlanner
-from llm.commands.standard_commands import *
+from planner.llm_robot_planner import LLMRobotPlanner
+from planner.commands.standard_commands import *
 from utils.utils import read_key_value_pairs
 
 planner = LLMRobotPlanner(

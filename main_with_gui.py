@@ -1,10 +1,10 @@
 
-from llm.llm_robot_planner import LLMRobotPlanner
-from llm.commands.standard_commands import *
+from planner.llm_robot_planner import LLMRobotPlanner
+from planner.commands.standard_commands import *
 from utils.utils import read_key_value_pairs
 
 from flet import Page, app
-from gui.gui import LLMRobotPlannerInfoView
+from gui.real_time_info_view import LLMRobotPlannerRealTimeInfoView
 
 import threading
 import logging
@@ -15,22 +15,6 @@ LLM_logger.setLevel(logging.DEBUG)
 LLM_command_logger = logging.getLogger("LLMCommand")
 LLM_command_logger.setLevel(logging.DEBUG)
 
-class LogHandler(logging.Handler):
-    def __init__(self, log_display: LLMRobotPlannerInfoView):
-        super().__init__()
-        self.log_display = log_display
-        
-        formatter = logging.Formatter('%(message)s')
-        self.setFormatter(formatter)
-        self.setLevel(logging.DEBUG)
-
-    def emit(self, record):
-        log_entry = self.format(record)
-        if record.name == "LLMRobotPlanner" and record.levelno >= logging.INFO:
-            self.log_display.append_left(log_entry)
-        elif record.name == "LLMCommand":
-            self.log_display.append_right(log_entry)
-        
 # LLM Robot Planner 実行        
 def process_llm_robot_planner():
     planner = LLMRobotPlanner(
@@ -44,6 +28,8 @@ def process_llm_robot_planner():
             GetSelfHistoryCommand(),
             IntrofuceSelfCommand(),
             SpeakMessageCommand(),
+            AskQuestionCommand(),
+            PickUpObjectCommand(),
             ErrorCommand(),
         ]
     )
@@ -53,7 +39,7 @@ def process_llm_robot_planner():
     )
 
     for _ in planner.process():
-        pass
+        LLM_logger.info("")
 
 # Console用 Logger
 console_handler = logging.StreamHandler()
@@ -65,11 +51,14 @@ LLM_logger.addHandler(console_handler)
 llm_robot_planner = threading.Thread(target=process_llm_robot_planner, daemon=True)
 llm_robot_planner.start()
 
+from logger.logger import LLMRobotPlannerLogger
+from gui.logger_handler import LoggingGUIHandler
+custom_logger = LLMRobotPlannerLogger()
+
+
 def main(page: Page):
-    planner_info = LLMRobotPlannerInfoView(page=page)
-    gui_handler = LogHandler(planner_info)
-    LLM_logger.addHandler(gui_handler)
-    LLM_command_logger.addHandler(gui_handler)
+    planner_info = LLMRobotPlannerRealTimeInfoView(page=page)
+    custom_logger.add_handler(LoggingGUIHandler(planner_info))
     page.add(planner_info)
     
 app(target=main)

@@ -5,6 +5,7 @@ import inspect
 import functools
 from datetime import datetime
 from dataclasses import dataclass, field
+from abc import ABC, abstractmethod
 
 @dataclass(frozen=True)
 class LogRecord:
@@ -32,12 +33,21 @@ class LogRecord:
             timestamp=timestamp if timestamp is not None else datetime.now().timestamp(),
             uid=uid if uid is not None else uuid.uuid4().bytes
         )
-        
+
+class LoggerHandler(ABC):
+    @abstractmethod
+    def handle(self, log: LogRecord):
+        pass
             
 class LLMRobotPlannerLogger:
     
     _instance = None  # singleton    
     _handlers = []
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(LLMRobotPlannerLogger, cls).__new__(cls)
+        return cls._instance
     
     def add_handler(self, handler: Any):
         self._handlers.append(handler)
@@ -48,11 +58,6 @@ class LLMRobotPlannerLogger:
     def log(self, action: str, detail: Optional[str] = None):
         log = LogRecord(action, detail)
         self._process_handler(log)
-    
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(LLMRobotPlannerLogger, cls).__new__(cls)
-        return cls._instance
     
     def _process_handler(self, log: LogRecord):
         for handler in self._handlers:

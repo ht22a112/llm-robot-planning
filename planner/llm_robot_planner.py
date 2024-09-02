@@ -9,9 +9,9 @@ from database.message import *
 
 from prompts.utils import get_prompt
 
+from llm.logger import log_llm
 import logging
 logger = logging.getLogger("LLMRobotPlanner")
-cmd_logger = logging.getLogger("LLMCommand")
 
 class LLMRobotPlanner():
     def __init__(self, api_keys: dict, commands: List[CommandBase]):
@@ -130,7 +130,6 @@ class LLMRobotPlanner():
         exec_result = cmd.execute(**args)
         exec_result.cmd_name = command_name
         exec_result.cmd_args = args
-        cmd_logger.info(exec_result)
         cmd.on_exit()
         
         return exec_result
@@ -157,14 +156,13 @@ class LLMRobotPlanner():
             symbol=("{{", "}}")
         )
         
-        logger.debug(prompt)
         response = self.chat_ai.generate_content_v2(
             prompt=prompt, 
             response_type="json", 
             convert_type="dict",
             model_name=None
         )
-        logger.debug(response)
+        log_llm(response, prompt)
         return response
         
         
@@ -188,14 +186,13 @@ class LLMRobotPlanner():
             symbol=("{{", "}}")
         )
         
-        logger.debug(prompt)
         response = self.chat_ai.generate_content_v2(
             prompt=prompt,
             response_type="json",
             convert_type="dict",
             model_name=None
         )
-        logger.debug(response)
+        log_llm(response, prompt)
             
         return [
             Task(

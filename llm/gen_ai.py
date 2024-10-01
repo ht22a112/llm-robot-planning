@@ -1,40 +1,11 @@
 from typing import Union, Dict, Literal, Optional, overload
-from abc import ABC, abstractmethod
 import json
+from utils.json_utils import fix_and_parse_json
+from llm.wrapper_base import GenAIWrapper
+from llm.wrappers.gemini import GeminiWrapper  # TODO: 後に削除
 
 import logging
 logger = logging.getLogger("GenAI")
-
-import google.generativeai as genai
-from google.generativeai import GenerationConfig
-
-import ollama
-
-from utils.json_utils import fix_and_parse_json
-
-
-class GenAIWrapper(ABC):
-    @abstractmethod
-    def generate_content(self, prompt, model=None, *args, **kwargs) -> str:
-        pass
-    
-class OpenAIWrapper(GenAIWrapper):
-    pass
-
-class GeminiWrapper(GenAIWrapper):
-    def __init__(self, api_key, model_name, *args, **kwargs):
-        genai.configure(api_key=api_key, *args, **kwargs)
-        #TODO: テスト用なのであとで消す
-        config = GenerationConfig(temperature=0.0)
-        self.model = genai.GenerativeModel(model_name, generation_config=config)
-        
-    def generate_content(self, prompt, *args, **kwargs) -> str:
-        response = self.model.generate_content(prompt, *args, **kwargs)
-        return response.text
-
-class OllamaWrapper(GenAIWrapper):
-    def __init__(self) -> None:
-        pass
 
 
 class UnifiedAIRequestHandler:
@@ -48,18 +19,18 @@ class UnifiedAIRequestHandler:
         self.api_keys = api_keys
         #self.default_model_name = default_model_name
         
-        # check api_keys and get model_lists
-        for service_name, api_key in api_keys.items():
-            if service_name == "google":
-                genai.configure(api_key=api_key)
-                s = ""
-                for m in genai.list_models():
-                    s += m.name + "\n" 
-                logger.debug(s)
-            elif service_name == "openai":
-                raise NotImplementedError("openai is not supported yet")
-            else:
-                raise ValueError(f"service_name {service_name} is not supported")
+        # # check api_keys and get model_lists
+        # for service_name, api_key in api_keys.items():
+        #     if service_name == "google":
+        #         genai.configure(api_key=api_key)
+        #         s = ""
+        #         for m in genai.list_models():
+        #             s += m.name + "\n" 
+        #         logger.debug(s)
+        #     elif service_name == "openai":
+        #         raise NotImplementedError("openai is not supported yet")
+        #     else:
+        #         raise ValueError(f"service_name {service_name} is not supported")
         
     def generate_content(self, prompt, model_name: Optional[str]=None, *args, **kwargs) -> str:
         return self._get_model(model_name, "generate_content").generate_content(prompt, *args, **kwargs)

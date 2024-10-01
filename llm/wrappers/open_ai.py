@@ -1,0 +1,2 @@
+class OpenAIWrapper(GenAIWrapper):
+    pass

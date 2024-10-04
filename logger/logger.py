@@ -1,45 +1,25 @@
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, asdict, replace
 from typing import Dict, Any, Optional, Union, List, TypeVar, Mapping, Tuple, Set, FrozenSet
 from abc import ABC, abstractmethod
 from types import MappingProxyType
 from contextlib import contextmanager
 from enum import Enum
-from uuid import uuid4, UUID
-import copy
+from uuid import uuid4
 from datetime import datetime
 
+from logger.logger_exceptions import *
+
 uuidv4_str = str
-FeedBackValueType = Union[str, int, float, bytes]
-MetadataValueType = Union[str, int, float, bytes]
+FeedBackValueType = Union[str, int, float, bytes, bool]
+MetadataValueType = Union[str, int, float, bytes, bool]
 
 class LogType(Enum):
     TRACE = "trace"
     ACTION = "action"
     SPAN = "span"
     EVENT = "event"
-    
 
 T = TypeVar('T', bound='LogRecord')
-
-class LogRecordError(Exception):
-    """LogRecordに関連するエラーの基底クラス"""
-    pass
-
-class InvalidTypeError(LogRecordError):
-    """無効な型が使用された場合のエラー"""
-    pass
-
-class LogEntryError(Exception):
-    """Base class for exceptions in the LogEntryContext."""
-    pass
-
-class InvalidLogOperationError(LogEntryError):
-    """Exception raised for invalid operations on a log entry."""
-    def __init__(self, operation: str, log_type: LogType):
-        self.operation = operation
-        self.log_type = log_type
-        self.message = f"Invalid operation '{operation}' for log type '{log_type.value}'"
-        super().__init__(self.message)
 
 @dataclass(frozen=True)
 class LogRecord(ABC):
@@ -52,7 +32,7 @@ class LogRecord(ABC):
     uid: str = field(default_factory=lambda: str(uuid4()))
 
     def __post_init__(self):
-        self._validate_types()
+        #self._validate_types()  # TODO: あとでコメントアウトを解除
         object.__setattr__(self, 'tag', frozenset(self.tag))
         object.__setattr__(self, 'metadata', MappingProxyType(dict(self.metadata)))
 
@@ -108,7 +88,7 @@ class LogRecord(ABC):
                 for k, v in asdict(self).items()}
             
     def create_new(self: T, **changes) -> T:
-        return type(self)(**{**self.__dict__, **changes})
+        return replace(self, **changes)
 
 
 @dataclass(frozen=True)
@@ -121,10 +101,9 @@ class DurationLogRecord(LogRecord):
 
     def __post_init__(self):
         super().__post_init__()
-        self._validate_types()
+        #self._validate_types()  # TODO: あとでコメントアウトを解除
 
     def _validate_types(self):
-        super()._validate_types()
         if not isinstance(self.input, str):
             raise InvalidTypeError(f"input must be a string, not {type(self.input)}")
         if not isinstance(self.output, str):
@@ -224,25 +203,25 @@ class LogEntryContext():
         if self._log_type in [LogType.TRACE, LogType.ACTION, LogType.SPAN]:
             self._update(input=input)
         else:
-            raise InvalidLogOperationError("input", self._log_type)
+            raise InvalidLogOperationError("input", self._log_type.value)
 
     def output(self, output: str):
         if self._log_type in [LogType.TRACE, LogType.ACTION, LogType.SPAN]:
             self._update(output=output)
         else:
-            raise InvalidLogOperationError("output", self._log_type)
+            raise InvalidLogOperationError("output", self._log_type.value)
 
     def feedback(self, feedback: str):
         if self._log_type in [LogType.TRACE, LogType.ACTION, LogType.SPAN]:
             self._update(feedback=feedback)
         else:
-            raise InvalidLogOperationError("feedback", self._log_type)
+            raise InvalidLogOperationError("feedback", self._log_type.value)
 
     def context(self, context: str):
         if self._log_type == LogType.EVENT:
             self._update(context=context)
         else:
-            raise InvalidLogOperationError("context", self._log_type)
+            raise InvalidLogOperationError("context", self._log_type.value)
 
     def _update(self, **kwargs):
         self._log_system._update_current_entry(**kwargs)
@@ -250,7 +229,7 @@ class LogEntryContext():
         
 class Handler(ABC):
     @abstractmethod
-    def handle(self, log: LogRecord):
+    def handle(self, log: LogEvent):
         pass
 
     @property
@@ -271,7 +250,7 @@ class NonRealTimeHandler(Handler):
 class LLMRobotPlannerLogSystem():
 
     _instance = None  # singleton
-    _handlers = []
+    _handlers: List[Handler] = []
     _log_stack: List[LogRecord] = []
     
     def __new__(cls):
@@ -280,10 +259,10 @@ class LLMRobotPlannerLogSystem():
         return cls._instance
     
 
-    def add_handler(self, handler: Any):
+    def add_handler(self, handler: Handler):
         self._handlers.append(handler)
     
-    def remove_handler(self, handler: Any):
+    def remove_handler(self, handler: Handler):
         self._handlers.remove(handler)
     
     def event(
@@ -311,6 +290,11 @@ class LLMRobotPlannerLogSystem():
         context = LogEntryContext(self, uid, LogType.TRACE)
         try:
             yield context
+        except Exception as e:
+            # TODO: Errorのログの記録方法を変える
+            self._update_current_entry(feedback=str(e))
+            self._end_log_entry()
+            raise e
         finally:
             self._end_log_entry()
     
@@ -325,6 +309,11 @@ class LLMRobotPlannerLogSystem():
         context = LogEntryContext(self, uid, LogType.ACTION)
         try:
             yield context
+        except Exception as e:
+            # TODO: Errorのログの記録方法を変える
+            self._update_current_entry(feedback=str(e))
+            self._end_log_entry()
+            raise e
         finally:
             self._end_log_entry()
     
@@ -339,6 +328,11 @@ class LLMRobotPlannerLogSystem():
         context = LogEntryContext(self, uid, LogType.SPAN)
         try:
             yield context
+        except Exception as e:
+            # TODO: Errorのログの記録方法を変える
+            self._update_current_entry(feedback=str(e))
+            self._end_log_entry()
+            raise e
         finally:
             self._end_log_entry()
     
@@ -390,7 +384,7 @@ class LLMRobotPlannerLogSystem():
     def _log_instant_entry(self, log_type: LogType, *args, **kwargs):
         parent = self._log_stack[-1].uid if self._log_stack else None
         record = self._create_record(log_type, *args, **kwargs, parent=parent)
-        log_event = LogEvent(LogEventType.UPDATE, record)
+        log_event = LogEvent(LogEventType.END, record)
         self._process_handler(log_event)
             
     def _create_record(self, log_type: LogType, *args, **kwargs) -> LogRecord:
@@ -406,24 +400,8 @@ class LLMRobotPlannerLogSystem():
             raise ValueError(f"Unknown log type: {log_type}")
         
     def _process_handler(self, event: LogEvent, realtime: bool = False):
-            for handler in self._handlers:
-                if realtime and handler.is_realtime:
-                    handler.handle(event)
-                elif not realtime:
-                    handler.handle(event)
-
-            
-## TEST ###
-logger = LLMRobotPlannerLogSystem()
-
-def test():
-    with logger.trace("test") as entry:
-        entry.feedback("test")
-        
-        with logger.action("test2", tag={"tag1", "tag2"}) as entry:
-            entry.feedback("test2")
-        
-        logger.event("test3", context="error")
-        
-
-test()
+        for handler in self._handlers:
+            if realtime and handler.is_realtime:
+                handler.handle(event)
+            elif not realtime:
+                handler.handle(event)

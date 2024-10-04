@@ -7,7 +7,7 @@ from enum import Enum
 from uuid import uuid4
 from datetime import datetime
 
-from logger.logger_exceptions import *
+from logger.exceptions import *
 
 uuidv4_str = str
 FeedBackValueType = Union[str, int, float, bytes, bool]

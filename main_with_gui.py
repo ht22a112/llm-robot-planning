@@ -1,10 +1,7 @@
 
 from planner.llm_robot_planner import LLMRobotPlanner
-from planner.commands.standard_commands import *
+from planner.command.commands.standard_commands import *
 from utils.utils import read_key_value_pairs
-
-from flet import Page, app
-from gui.real_time_info_view import LLMRobotPlannerRealTimeInfoView
 
 import threading
 import logging
@@ -25,11 +22,11 @@ def process_llm_robot_planner():
         commands=[
             MoveCommand(),
             FindCommand(),
-            GetSelfHistoryCommand(),
             IntrofuceSelfCommand(),
             SpeakMessageCommand(),
             AskQuestionCommand(),
             PickUpObjectCommand(),
+            DropObjectCommand(),
             ErrorCommand(),
         ]
     )
@@ -51,16 +48,18 @@ LLM_logger.addHandler(console_handler)
 llm_robot_planner = threading.Thread(target=process_llm_robot_planner, daemon=True)
 llm_robot_planner.start()
 
-from logger.logger import LLMRobotPlannerLogger
+from flet import Page, app
+from gui.view.real_time_info_view import LLMRobotPlannerRealTimeInfoView
 from gui.logger_handler import LoggingGUIHandler
-custom_logger = LLMRobotPlannerLogger()
+from logger.logger import LLMRobotPlannerLogSystem
+log_system = LLMRobotPlannerLogSystem()
 
 
 def main(page: Page):
     planner_info = LLMRobotPlannerRealTimeInfoView(page=page)
-    custom_logger.add_handler(LoggingGUIHandler(planner_info))
+    log_system.add_handler(LoggingGUIHandler(planner_info))
     page.add(planner_info)
-    
+
 app(target=main)
 
 

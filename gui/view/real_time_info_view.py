@@ -1,4 +1,4 @@
-from flet import *
+from flet import *  # type: ignore
 from gui.control.selectable_list import SelectableList, SelectableListItem
 
 
@@ -9,7 +9,7 @@ class LLMRobotPlannerRealTimeInfoView(Container):
         super().__init__(*args, **kwargs)
         self.page = page
         self.expand = True
-        self.list_info_view = SelectableList(auto_scroll=True, on_change=self._on_change_list_item)
+        self.list_info_view = SelectableList(auto_scroll=False, on_change=self._on_change_list_item)
         self.left_view = Container(
             content=self.list_info_view,
             expand=True
@@ -21,27 +21,36 @@ class LLMRobotPlannerRealTimeInfoView(Container):
         )
         
         # テスト実装
-        from typing import List
-        self.data_logs: List[dict] = []
-        
-        
+        from typing import Dict
+        self.data_logs: Dict[str, dict] = {}
+        self.n = 0
+    
+    # テスト実装
     def append_list_item(
-        self, action_text, detail_text, timestamp_text, uid_text
+        self, action_text, detail_text, timestamp_text, uid_text, is_instant
     ):
         
         # テスト実装
         log = {"action": action_text, "detail": detail_text, "timestamp": timestamp_text, "uid": uid_text}        
-        self.data_logs.append(log)
+        self.data_logs[uid_text] = log
         
         self.list_info_view.controls.append(
             SelectableListItem(
                 on_selected=self._on_list_item_selected,
                 on_unselected=self._on_list_item_unselected,
-                content=Text(action_text),
+                content=Container(margin=margin.only(left=30*self.n), content=Text(action_text, size=18)),
             )
         )
         self.list_info_view.update()
-        
+        if not is_instant:
+            self.n += 1
+            
+    def update_list_item(self, action_text, detail_text, timestamp_text, uid_text, is_duration_end):
+        log = {"action": action_text, "detail": detail_text, "timestamp": timestamp_text, "uid": uid_text}        
+        self.data_logs[uid_text] = log
+        if is_duration_end:
+            self.n -= 1
+            
     def _on_list_item_selected(self, e):
         e.bgcolor = colors.with_opacity(0.2, colors.WHITE)
         e.update()
@@ -51,10 +60,10 @@ class LLMRobotPlannerRealTimeInfoView(Container):
         e.update()
     
     def _on_change_list_item(self, e):
-        index = e["index"]
-        
         # テスト実装
-        log = self.data_logs[index]
+        index = e["index"]
+        keys = list(self.data_logs.keys())
+        log = self.data_logs[keys[index]]
         self._detail_view(log["action"], log["detail"], log["timestamp"], log["uid"])
         
     def _detail_view(self, action_text, detail_text, timestamp_text, uid_text):

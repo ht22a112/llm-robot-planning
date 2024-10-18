@@ -271,13 +271,14 @@ class LLMRobotPlannerLogSystem():
         context: Optional[str] = None,
         tag: Union[FrozenSet[str], Set[str]] = frozenset(),
         metadata: Dict[str, MetadataValueType] = {}
-    ):
+    ) -> uuidv4_str:
         return self._log_instant_entry(
             log_type=LogType.EVENT,
             name=name,
             context=context,
             tag=tag,
-            metadata=metadata)
+            metadata=metadata
+        )
     
     @contextmanager
     def trace(
@@ -381,12 +382,13 @@ class LLMRobotPlannerLogSystem():
             event = LogEvent(LogEventType.UPDATE, updated_record, previous_record, kwargs)
             self._process_handler(event, realtime=True)
                     
-    def _log_instant_entry(self, log_type: LogType, *args, **kwargs):
+    def _log_instant_entry(self, log_type: LogType, *args, **kwargs) -> uuidv4_str:
         parent = self._log_stack[-1].uid if self._log_stack else None
         record = self._create_record(log_type, *args, **kwargs, parent=parent)
         log_event = LogEvent(LogEventType.END, record)
         self._process_handler(log_event)
-            
+        return record.uid
+    
     def _create_record(self, log_type: LogType, *args, **kwargs) -> LogRecord:
         if log_type == LogType.TRACE:
             return Trace(*args, **kwargs)

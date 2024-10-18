@@ -1,12 +1,14 @@
 from typing import Union, Dict, Literal, Optional, overload
 import json
 from utils.json_utils import fix_and_parse_json
-from llm.wrapper_base import GenAIWrapper
-from llm.wrappers.gemini import GeminiWrapper  # TODO: 後に削除
+from planner.llm.wrapper_base import GenAIWrapper
+from planner.llm.wrappers.gemini import GeminiWrapper  # TODO: 後に削除
 
 import logging
 logger = logging.getLogger("GenAI")
 
+from logger.logger import LLMRobotPlannerLogSystem
+log = LLMRobotPlannerLogSystem()
 
 class UnifiedAIRequestHandler:
     def __init__(
@@ -90,36 +92,44 @@ class UnifiedAIRequestHandler:
             生成結果（文字列、リスト、または辞書）
         """
         
-        response_text = self.generate_content(prompt, model_name, *args, **kwargs)
-        
-        if (convert_type is not None and convert_type.lower() != "none" 
-            and response_type is not None and response_type.lower() != "any"):
-                # convert 
-                if response_type.lower() == "json":
-                    try:
-                        py_obj = json.loads(response_text)
-                    except json.JSONDecodeError:
-                        py_obj = fix_and_parse_json(response_text)
-                else:
-                    raise ValueError(f"response type: '{response_type}' is not supported")
-                # response type check
-                if convert_type.lower() == "dict":
-                    if isinstance(py_obj, dict):
-                        pass
+        with log.span("LLM Generation") as span:
+            span.input(prompt)
+            response_text = self.generate_content(prompt, model_name, *args, **kwargs)
+            
+            if (convert_type is not None and convert_type.lower() != "none" 
+                and response_type is not None and response_type.lower() != "any"):
+                    # convert 
+                    if response_type.lower() == "json":
+                        try:
+                            py_obj = json.loads(response_text)
+                        except json.JSONDecodeError:
+                            try:
+                                py_obj = fix_and_parse_json(response_text)
+                            except Exception as e:
+                                raise Exception(f"{str(e)}\nresponse_text:{response_text}")
                     else:
-                        raise ValueError(f"response type: '{type(py_obj)}' is not dict\n{response_text}")
-                elif convert_type.lower() == "list":
-                    if isinstance(convert_type, list):
-                        pass
+                        raise ValueError(f"response type: '{response_type}' is not supported")
+                    # response type check
+                    if convert_type.lower() == "dict":
+                        if isinstance(py_obj, dict):
+                            pass
+                        else:
+                            raise ValueError(f"response type: '{type(py_obj)}' is not dict\n{response_text}")
+                    elif convert_type.lower() == "list":
+                        if isinstance(convert_type, list):
+                            pass
+                        else:
+                            raise ValueError()
                     else:
                         raise ValueError()
-                else:
-                    raise ValueError()
-                
-                response = py_obj
-        else:
-            response = response_text
-        return response
+                    
+                    response = py_obj
+                    span.output(json.dumps(response, indent=2, ensure_ascii=False))
+            else:
+                response = response_text
+                span.output(response)
+            
+            return response
 
 
     def _get_model(self, model_name, supported_generation_methods) -> GenAIWrapper:

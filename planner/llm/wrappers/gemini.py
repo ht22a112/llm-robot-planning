@@ -1,7 +1,7 @@
 import google.generativeai as genai
 from google.generativeai import GenerationConfig
 
-from llm.gen_ai import GenAIWrapper
+from planner.llm.gen_ai import GenAIWrapper
 
 class GeminiWrapper(GenAIWrapper):
     def __init__(self, api_key, model_name, *args, **kwargs):

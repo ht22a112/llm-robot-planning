@@ -1,4 +1,5 @@
 import re
+import json
 from typing import Dict, Union, Tuple
 
 def read_key_value_pairs(file_path: str) -> Dict[str, str]:
@@ -56,6 +57,18 @@ def replace_placeholders(input_string: str, replacements: Dict[str, str], symbol
         return replacements.get(key, match.group(0))
 
     return pattern.sub(replace, input_string)
+
+
+def pretty_print_nested_dict(nested_dict: dict):
+  """入れ子になっているdictを綺麗にインデントをつけてstringで出力する関数
+
+  Args:
+    nested_dict: 入れ子になっているdict
+
+  Returns:
+    綺麗にインデントされたstring
+  """
+  return json.dumps(nested_dict, indent=2, ensure_ascii=False)
 
 
 # def remove_json_markers(self, json_str):

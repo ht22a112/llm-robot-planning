@@ -1,10 +1,10 @@
-from planner.command_base import CommandBase, CommandExecutionResult
+from planner.command.command_base import Command, CommandExecutionResult
 
 import logging
 logger = logging.getLogger("LLMCommand")
 
-
-class MoveCommand(CommandBase):
+import time # TODO: 仮の実装 後で消す
+class MoveCommand(Command):
     def __init__(self) -> None:
         super().__init__(
             name="move",
@@ -16,19 +16,19 @@ class MoveCommand(CommandBase):
     def execute(self, location) -> CommandExecutionResult:
         # TODO: 仮の実装　後で修正する
         import random
-        result = random.choice([True, False])
-        
+        result = False
+        time.sleep(1) # TODO: 後で消す
         if result:
             status = "failed"
         else:
             status = "succeeded"
-        
+
         return CommandExecutionResult(
             status=status,
-            message=""
+            details=""
         )
 
-class FindCommand(CommandBase):
+class FindCommand(Command):
     def __init__(self) -> None:
         super().__init__(
             name="find",
@@ -40,33 +40,21 @@ class FindCommand(CommandBase):
         # TODO: 仮の実装　後で修正する
         import random
         result = random.choice([True, False])
+        time.sleep(1) # TODO: 後で消す
         
-        if result:
+        if not result:
             status = "failed"
             message = f"{object} が見つかりません"
         else:
             status = "succeeded"
-            message = "object found"
+            message = f"{object}が見つかりました"
         
         return CommandExecutionResult(
             status=status,
-            message=""
+            details=message
         )
 
-class GetSelfHistoryCommand(CommandBase):
-    def __init__(self) -> None:
-        super().__init__(
-            name="get_self_history",
-            discription='自身の行動履歴を取得するコマンド',
-            execute_args_discription={"target": "<content>"}
-        )
-        
-    def execute(self, target) -> CommandExecutionResult:
-        return CommandExecutionResult(
-            status="succeeded"
-        )
-
-class IntrofuceSelfCommand(CommandBase):
+class IntrofuceSelfCommand(Command):
     def __init__(self) -> None:
         super().__init__(
             name="introduce_self",
@@ -79,7 +67,7 @@ class IntrofuceSelfCommand(CommandBase):
             status="succeeded"
         )
 
-class SpeakMessageCommand(CommandBase):
+class SpeakMessageCommand(Command):
     def __init__(self) -> None:
         super().__init__(
             name="speak_message",
@@ -88,11 +76,12 @@ class SpeakMessageCommand(CommandBase):
         )
     
     def execute(self, speak_message) -> CommandExecutionResult:
+        time.sleep(1) # TODO: 後で消す
         return CommandExecutionResult(
             status="succeeded"
         )   
 
-class AskQuestionCommand(CommandBase):
+class AskQuestionCommand(Command):
     def __init__(self) -> None:
         super().__init__(
             name="ask_question",
@@ -101,11 +90,12 @@ class AskQuestionCommand(CommandBase):
         )
     
     def execute(self, question) -> CommandExecutionResult:
+        time.sleep(1) # TODO: 後で消す
         return CommandExecutionResult(
             status="succeeded"
         )
 
-class PickUpObjectCommand(CommandBase):
+class PickUpObjectCommand(Command):
     def __init__(self) -> None:
         super().__init__(
             name="pick_up_object",
@@ -115,11 +105,27 @@ class PickUpObjectCommand(CommandBase):
         )
         
     def execute(self, object) -> CommandExecutionResult:
+        time.sleep(1) # TODO: 後で消す
+        return CommandExecutionResult(
+            status="succeeded"
+        )
+    
+class DropObjectCommand(Command):
+    def __init__(self) -> None:
+        super().__init__(
+            name="drop_object",
+            discription='ロボットのカメラとロボットが持っているアームを使用して持っている物やオブジェクトを落とす',
+            execute_args_discription={"object": "<object_name>"},
+            execute_required_known_arguments=["object"],
+        )
+        
+    def execute(self, object) -> CommandExecutionResult:
+        time.sleep(1) # TODO: 後で消す
         return CommandExecutionResult(
             status="succeeded"
         )
         
-class ErrorCommand(CommandBase):
+class ErrorCommand(Command):
     def __init__(self) -> None:
         super().__init__(
             name="error",

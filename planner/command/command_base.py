@@ -7,7 +7,7 @@ import logging
 logger = logging.getLogger("LLMCommand")
 
     
-class CommandBase(ABC):
+class Command(ABC):
     def __init__(
         self, 
         name: str, 
@@ -85,12 +85,12 @@ class CommandExecutionResult():
     def __init__(
         self,
         status: Literal["succeeded", "failed"], 
-        message = ""
+        details: str = ""
     ) -> None:
         self.cmd_name = ""
         self.cmd_args: Dict[str, str] = {}
         self.status: Literal['succeeded', 'failed'] = status
-    
+        self.details: str = details
 
     def __str__(self) -> str:
         return f"[{self.cmd_name}] status: {self.status}"

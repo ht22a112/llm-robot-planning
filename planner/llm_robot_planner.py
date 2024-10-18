@@ -1,44 +1,50 @@
 from typing import List, Union, Dict
 import json
 
-from llm.gen_ai import UnifiedAIRequestHandler
-from planner.command_base import CommandBase, CommandExecutionResult
+from planner.llm.gen_ai import UnifiedAIRequestHandler
+from planner.command.command_executor import CommandExecutor
+from planner.database.database import DatabaseManager, Task
 
-from database.database import DatabaseManager, Task
-from database.message import *
+from planner.command.command_base import Command, CommandExecutionResult
+from planner.task_service import TaskService
+from planner.result_evaluator import ResultEvaluator
 
-from prompts.utils import get_prompt
-
-from llm.logger import log_llm
+from logger.logger import LLMRobotPlannerLogSystem
+log = LLMRobotPlannerLogSystem()
 import logging
 logger = logging.getLogger("LLMRobotPlanner")
 
+
 class LLMRobotPlanner():
-    def __init__(self, api_keys: dict, commands: List[CommandBase]):
-        self.chat_ai = UnifiedAIRequestHandler(
+    """
+    全体を処理のフローを制御するクラス
+    """
+    def __init__(self, api_keys: dict, commands: List[Command]):
+        self.llm = UnifiedAIRequestHandler(
             api_keys=api_keys
         )
-        self._commands: Dict[str, CommandBase] = {}
+        self._commands: Dict[str, Command] = {}
         self._db: DatabaseManager = DatabaseManager() 
-
+        self._task_service = TaskService(self.llm)
+        self._cmd_executor = CommandExecutor(self)
+        self._result_evaluator = ResultEvaluator(self._db)
         self.register_command(commands)
+        
+    # TODO: あとで削除
+    def _get_all_command_discriptions(self) -> List[str]:
+        return [command.discription for command in self._commands.values()]
     
-    def register_command(self, commands: List[CommandBase]):
+    def register_command(self, commands: List[Command]):
         for command in commands:
-            if not isinstance(command, CommandBase):
-                raise TypeError("command must be subclass of CommandBase")
+            if not isinstance(command, Command):
+                raise TypeError("command must be subclass of Command")
             
             command_name = command.name
             if command_name in self._commands:
                 raise ValueError(f"command: '{command_name}' is already registered. command name must be unique")
             self._commands[command_name] = command
             
-    def _get_all_command_discriptions(self) -> List[str]:
-        return [command.discription for command in self._commands.values()]
-    
-    def _get_all_knowledge_names(self) -> List[str]:
-        return ["オブジェクト（物、物体）の位置", "場所の位置情報", "周囲に居る人の性別および名前に関する情報", "自身の過去の行動に関する情報"]
-    def _get_command(self, name) -> CommandBase:
+    def _get_command(self, name) -> Command:
         # TODO: 追加の処理を追加する
         return self._commands[name]
         
@@ -52,20 +58,31 @@ class LLMRobotPlanner():
         Returns:
             tasks: List[Task]
         """
+        log.event(
+            name="初期化",
+            context=f"ユーザーからの指示: {instruction}")
         
-        tasks = self.split_instruction(instruction)
-        
+        with log.span(name="タスクの分解：") as span:
+            span.input(f"指示: {instruction}")
+            tasks = self._task_service.split_instruction(instruction)
+            span.output("\n".join(f"タスク{i}:\n    タスクの説明: {task.description}\n    タスクの詳細: {task.detail}\n    required_info: {task.required_info}" for i, task in enumerate(tasks, 1)))
         logger.info(
             f"[*]initialize >> create new job\n"
             f"[-]instruction: {instruction}\n"
-            f"[-]tasks: {tasks}\n"
-        )
-        
+            f"[-]tasks: {tasks}\n")
         self._db.start_new_job(
             instruction=instruction,
-            tasks=tasks
-        )
+            tasks=tasks)
         
+        # TODO: 簡易実装、あとで変更する
+        self._db._sql_db.log_robot_action(
+            action="initialize",
+            status="succeeded",
+            details="ロボットの初期化および行動決定システムの初期化",
+            x=None,
+            y=None,
+            z=None,
+            timestamp=None)
         return tasks
         
 
@@ -87,117 +104,44 @@ class LLMRobotPlanner():
         
         # tasksの実行
         for task in tasks:
-            # taskの分解
-            commands = self.split_task(task.description, task.detail)
-            task.commands = commands
-            logger.info(f"task description: {task.description}\n"
-                        f"task detail: {task.detail}\n"
-                        f"required_info: {task.required_info}")
-            for cmdN, cmd in commands.items():
-                logger.info(f"{cmdN}> {cmd['name']}: {cmd['args']}")
+            with log.action(name="タスクの実行：") as action:
+                action.input(f"タスク: {json.dumps(task.to_dict(), indent=4, ensure_ascii=False)}\n")
+                # taskの分解
+                with log.span(name="コマンドプランニング：") as span:
+                    # TODO: 簡易実装、あとで変更する
+                    span.input(f"task: {task.description}\ntask detail: {task.detail}\n")
+                    action_history = str(json.dumps(self._db._sql_db.get_all_actions(), indent=4, ensure_ascii=False))
+                    commands = self._task_service.split_task(
+                        task_description=task.description, 
+                        task_detail=task.detail, 
+                        cmd_disc_list=self._get_all_command_discriptions(), 
+                        action_history=action_history)
+                    span.output(f"plan: {json.dumps(commands, indent=4, ensure_ascii=False)}\n")
                 
-            # commandの実行
-            for cmdN, cmd in commands.items():
-                cmd_name = cmd["name"]
-                cmd_args = cmd["args"]
+                task.commands = commands
+                logger.info(f"task description: {task.description}\n"
+                            f"task detail: {task.detail}\n"
+                            f"required_info: {task.required_info}")
+                for cmdN, cmd in commands.items():
+                    logger.info(f"{cmdN}> {cmd['name']}: {cmd['args']}")
                 
-                logger.info(f"[EXEC] {cmdN}: {cmd_name}")
-                exec_result = self.execute_command(cmd_name, cmd_args)
-                logger.info(f"[RESULT] {exec_result}")
-                
-            yield commands
-    
-    from logger.logger import FunctionLogger
-    @FunctionLogger.log_function
-    def execute_command(self, command_name: str, args: dict) -> CommandExecutionResult:
-        """
-        コマンドを実行する
+                # taskの実行
+                with log.span(name="コマンドの実行：") as span:
+                    span.input(f"commands: {json.dumps(commands, indent=4, ensure_ascii=False)}")
+                    # commandの実行
+                    for cmdN, cmd in commands.items():
+                        cmd_name = cmd["name"]
+                        cmd_args = cmd["args"]
+                        
+                        logger.info(f"[EXEC] {cmdN}: {cmd_name}")
+                        exec_result = self._cmd_executor.execute_command(cmd_name, cmd_args)
+                        logger.info(f"[RESULT] {exec_result}")
+                        self._result_evaluator.evaluate(exec_result)
+                        
+                    yield commands
+                    span.output("成功")
+                action.output(f"タスクの実行結果: 成功")
         
-        Args:
-            command_name: 実行するコマンド名
-            args: dict[str, Any] 
-                {
-                    "arg1_name": "value",
-                    "arg2_name": "value"
-                }
-            
-        Returns:
-            CommandExecutionResult
-        """
-        cmd = self._get_command(command_name)
-        # コマンドの実行
-        cmd.on_enter()
-        exec_result = cmd.execute(**args)
-        exec_result.cmd_name = command_name
-        exec_result.cmd_args = args
-        cmd.on_exit()
-        
-        return exec_result
-    
-    def split_task(self, task_description: str, task_detail: str) -> dict:
-        
-        # コマンド一覧の生成
-        command_discription = self._get_all_command_discriptions()
-        result = ""
-        for idx, content in enumerate(command_discription, 1):
-            if idx == 1:
-                result += f"{idx}: {content}\n"
-            else:
-                result += f"    {idx}: {content}\n"
-        command_discription = result
-        
-        prompt = get_prompt(
-            prompt_name="split_task",
-            replacements={
-                "task_description": task_description,
-                "task_detail": task_detail,
-                "command_discription": command_discription
-            },
-            symbol=("{{", "}}")
-        )
-        
-        response = self.chat_ai.generate_content_v2(
-            prompt=prompt, 
-            response_type="json", 
-            convert_type="dict",
-            model_name=None
-        )
-        log_llm(response, prompt)
-        return response
+
         
         
-        
-    def split_instruction(self, instruction: str) -> List[Task]:
-        """
-        Args:
-            instruction: str ユーザーからの指示（最初にロボットに与える命令）
-        
-        Returns:
-            List[Task]: ロボットに与える命令のリスト
-        """
-        
-        obtainable_information_list = "".join(f'・{name}\n' for name in self._get_all_knowledge_names())
-        prompt = get_prompt(
-            prompt_name="split_instruction",
-            replacements={
-                "obtainable_information_list": str(obtainable_information_list),
-                "instruction": instruction,
-            },
-            symbol=("{{", "}}")
-        )
-        
-        response = self.chat_ai.generate_content_v2(
-            prompt=prompt,
-            response_type="json",
-            convert_type="dict",
-            model_name=None
-        )
-        log_llm(response, prompt)
-            
-        return [
-            Task(
-                description=task.get("description"), 
-                detail=task.get("detail"),
-                required_info=task.get("required information")
-            ) for task in response["tasks"].values()
-        ]

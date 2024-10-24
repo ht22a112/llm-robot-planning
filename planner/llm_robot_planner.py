@@ -2,10 +2,12 @@ from typing import List, Union, Dict
 import json
 
 from planner.llm.gen_ai import UnifiedAIRequestHandler
-from planner.command.command_executor import CommandExecutor
-from planner.database.database import DatabaseManager, Task
 
 from planner.command.command_base import Command, CommandExecutionResult
+from planner.command.command_executor import CommandExecutor
+
+from planner.database.database import DatabaseManager
+from planner.database.data_type import TaskRecord
 from planner.task_service import TaskService
 from planner.result_evaluator import ResultEvaluator
 
@@ -25,7 +27,7 @@ class LLMRobotPlanner():
         )
         self._commands: Dict[str, Command] = {}
         self._db: DatabaseManager = DatabaseManager() 
-        self._task_service = TaskService(self.llm)
+        self._task_service = TaskService(self.llm, self._db)
         self._cmd_executor = CommandExecutor(self)
         self._result_evaluator = ResultEvaluator(self._db)
         self.register_command(commands)
@@ -38,7 +40,7 @@ class LLMRobotPlanner():
         for command in commands:
             if not isinstance(command, Command):
                 raise TypeError("command must be subclass of Command")
-            
+
             command_name = command.name
             if command_name in self._commands:
                 raise ValueError(f"command: '{command_name}' is already registered. command name must be unique")
@@ -56,7 +58,7 @@ class LLMRobotPlanner():
             instruction: str ユーザーからの指示（最初にロボットに与える命令）
         
         Returns:
-            tasks: List[Task]
+            tasks: List[TaskRecord]
         """
         log.event(
             name="初期化",
@@ -75,7 +77,7 @@ class LLMRobotPlanner():
             tasks=tasks)
         
         # TODO: 簡易実装、あとで変更する
-        self._db._sql_db.log_robot_action(
+        self._db.log_robot_action(
             action="initialize",
             status="succeeded",
             details="ロボットの初期化および行動決定システムの初期化",
@@ -110,7 +112,7 @@ class LLMRobotPlanner():
                 with log.span(name="コマンドプランニング：") as span:
                     # TODO: 簡易実装、あとで変更する
                     span.input(f"task: {task.description}\ntask detail: {task.detail}\n")
-                    action_history = str(json.dumps(self._db._sql_db.get_all_actions(), indent=4, ensure_ascii=False))
+                    action_history = str(json.dumps(self._db.get_all_actions(), indent=4, ensure_ascii=False))
                     commands = self._task_service.split_task(
                         task_description=task.description, 
                         task_detail=task.detail, 

@@ -1,7 +1,8 @@
 from typing import Union, Tuple, Dict
 
 from utils.utils import replace_placeholders
-from prompts.system_prompt import *
+from prompts.prompt_texts.system_prompt import *
+from prompts.prompt_texts.retrieval_doc import *
 
 def get_prompt(
     prompt_name: str,
@@ -22,6 +23,8 @@ def get_prompt(
         prompt = split_instruction_prompt
     elif prompt_name == "split_task":
         prompt = split_task_prompt
+    elif prompt_name == "GENERATE_QUERY":
+        prompt = GENERATE_QUERY_PROMPT
     else:
         raise ValueError(f"prompt_name {prompt_name} is not supported")
     

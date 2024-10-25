@@ -9,6 +9,7 @@ class MemoryDatabase():
 
 from planner.database.sqlite import SQLiteInterface
 from planner.database.sqlite import LocationKnowledge, ObjectKnowledge, ActionHistory
+from planner.database.chroma import ChromaDBWithGemini
 
 class DatabaseManager():
     def __init__(self):
@@ -20,6 +21,13 @@ class DatabaseManager():
         self._action_history = ActionHistory(self._sqlite_interface)
         self._location_knowledge = LocationKnowledge(self._sqlite_interface)
         #self.obj_db = ObjectKnowledge(self._sqlite_interface)
+        
+        #
+        self._document_db = ChromaDBWithGemini(
+            embedding_model="models/text-embedding-004",
+            embedding_model_api_key="AIzaSyAuGyhqc1sKSVqBQI6mN7lJd9LDVvY0Z_I",
+            db_path=db_path
+        )
         
         #
         self._init_helper()
@@ -106,6 +114,10 @@ class DatabaseManager():
 
     def get_all_known_locations(self) -> List[Location]:
         return self._location_knowledge.get_all()
+    
+    
+    def query_document(self, query_text: str, n_results: int = 1):
+        self._document_db.query([query_text], n_results)
     
     
     

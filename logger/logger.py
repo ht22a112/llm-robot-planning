@@ -164,25 +164,25 @@ class LogEvent:
             object.__setattr__(self, 'changes', MappingProxyType(dict(self.changes)))
     
 @dataclass(frozen=True)
-class Trace(DurationLogRecord):
+class TraceRecord(DurationLogRecord):
     @property
     def type(self) -> LogType:
         return LogType.TRACE
     
 @dataclass(frozen=True)
-class Action(DurationLogRecord):
+class ActionRecord(DurationLogRecord):
     @property
     def type(self) -> LogType:
         return LogType.ACTION
 
 @dataclass(frozen=True)
-class Span(DurationLogRecord):
+class SpanRecord(DurationLogRecord):
     @property
     def type(self) -> LogType:
         return LogType.SPAN
 
 @dataclass(frozen=True)
-class Event(InstantLogRecord):
+class EventRecord(InstantLogRecord):
     @property
     def type(self) -> LogType:
         return LogType.EVENT
@@ -391,13 +391,13 @@ class LLMRobotPlannerLogSystem():
     
     def _create_record(self, log_type: LogType, *args, **kwargs) -> LogRecord:
         if log_type == LogType.TRACE:
-            return Trace(*args, **kwargs)
+            return TraceRecord(*args, **kwargs)
         elif log_type == LogType.ACTION:
-            return Action(*args, **kwargs)
+            return ActionRecord(*args, **kwargs)
         elif log_type == LogType.SPAN:
-            return Span(*args, **kwargs)
+            return SpanRecord(*args, **kwargs)
         elif log_type == LogType.EVENT:
-            return Event(*args, **kwargs)
+            return EventRecord(*args, **kwargs)
         else:
             raise ValueError(f"Unknown log type: {log_type}")
         

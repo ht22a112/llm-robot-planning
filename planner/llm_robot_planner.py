@@ -79,7 +79,7 @@ class LLMRobotPlanner():
         
         with log.span(name="タスクの分解：") as span:
             span.input(f"指示: {instruction}")
-            tasks = self._task_service.split_instruction(instruction)
+            tasks = self._task_service.interpret_instruction(instruction)
             span.output("\n".join(f"タスク{i}:\n    タスクの説明: {task.description}\n    タスクの詳細: {task.detail}\n    required_info: {task.required_info}" for i, task in enumerate(tasks, 1)))
         logger.info(
             f"[*]initialize >> create new job\n"

@@ -56,7 +56,7 @@ class TaskService():
         return response
         
 
-    def split_instruction(self, instruction: str) -> List[TaskRecord]:
+    def interpret_instruction(self, instruction: str) -> List[TaskRecord]:
         """
         Args:
             instruction: str ユーザーからの指示（最初にロボットに与える命令）
@@ -67,7 +67,7 @@ class TaskService():
         
         obtainable_information_list = "".join(f'・{name}\n' for name in self._get_all_knowledge_names())
         prompt = get_prompt(
-            prompt_name="split_instruction",
+            prompt_name="interpret_instruction",
             replacements={
                 "obtainable_information_list": str(obtainable_information_list),
                 "instruction": instruction,
@@ -91,3 +91,5 @@ class TaskService():
                 required_info=task.get("required information")
             ) for task in response["tasks"].values()
         ]
+        
+    def 

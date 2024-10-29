@@ -19,8 +19,8 @@ def get_prompt(
         replacements (dict, optional): 置換値を含む辞書  
         symbol (Union[str, Tuple[str, str]], optional): 部分文字列を囲むために使用されるカスタム記号
     """
-    if prompt_name == "split_instruction":
-        prompt = split_instruction_prompt
+    if prompt_name == "interpret_instruction":
+        prompt = interpret_instruction_prompt
     elif prompt_name == "split_task":
         prompt = split_task_prompt
     elif prompt_name == "GENERATE_QUERY":

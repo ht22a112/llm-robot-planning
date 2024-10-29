@@ -1,5 +1,6 @@
 from typing import List, Union, Dict
 from planner.llm.gen_ai import UnifiedAIRequestHandler as LLM
+from planner.llm.parser import JsonParser
 from planner.database.database import DatabaseManager
 from prompts.utils import get_prompt
 
@@ -11,7 +12,9 @@ log = LLMRobotPlannerLogSystem()
 class TaskService():
     def __init__(self, llm: LLM, db: DatabaseManager):
         self._llm: LLM = llm
+        self._json_parser = JsonParser()
         self._db = db
+        
     # 後で削除
     def _get_all_knowledge_names(self) -> List[str]:
         return ["オブジェクト（物、物体）の位置", "場所の位置情報", "周囲に居る人の性別および名前に関する情報", "自身の過去の行動に関する情報"]
@@ -19,18 +22,15 @@ class TaskService():
     def _get_all_location_knowledge_names(self) -> List[str]:
         return list(set([location.name for location in self._db.get_all_known_locations()]))
         
-    def split_task(self, task_description: str, task_detail: str, cmd_disc_list: List[str], action_history: str) -> dict:
+    def split_task(self, task_description: str, task_detail: str, cmd_disc_list: List[str], action_history: str, knowledge: List[str]) -> dict:
         
         # コマンド一覧の生成
-        command_discription = cmd_disc_list
-        result = ""
-        for idx, content in enumerate(command_discription, 1):
-            if idx == 1:
-                result += f"{idx}: {content}\n"
-            else:
-                result += f"    {idx}: {content}\n"
-        command_discription = result
+        command_discription = "\n".join(f"        {idx}: {content}" for idx, content in enumerate(cmd_disc_list, 1))
         
+        # 知識一覧の生成
+        k = "\n".join([f'       ・{s}' for s in knowledge])
+        
+        # プロンプトの取得と生成
         prompt = get_prompt(
             prompt_name="split_task",
             replacements={
@@ -38,16 +38,20 @@ class TaskService():
                 "task_detail": task_detail,
                 "command_discription": command_discription,
                 "action_history": action_history,
+                "knowledge": k, 
                 "location_info": str(self._get_all_location_knowledge_names())
             },
             symbol=("{{", "}}")
         )
-        
-        response = self._llm.generate_content_v2(
-            prompt=prompt, 
-            response_type="json", 
-            convert_type="dict",
-            model_name=None
+
+        # 生成
+        response = self._json_parser.parse(
+            text=self._llm.generate_content(
+                prompt=prompt, 
+                model_name=None
+            ),
+            response_type="json",
+            convert_type="dict"
         )
         return response
         
@@ -71,11 +75,13 @@ class TaskService():
             symbol=("{{", "}}")
         )
         
-        response = self._llm.generate_content_v2(
-            prompt=prompt,
+        response = self._json_parser.parse(
+            text=self._llm.generate_content(
+                prompt=prompt, 
+                model_name=None
+            ),
             response_type="json",
-            convert_type="dict",
-            model_name=None
+            convert_type="dict"
         )
             
         return [

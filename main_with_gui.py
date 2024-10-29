@@ -44,9 +44,7 @@ console_handler.setFormatter(logging.Formatter('[%(levelname)s] %(message)s'))
 console_handler.setLevel(logging.DEBUG)
 LLM_logger.addHandler(console_handler)
 
-# LLM Robot Planner スレッドの開始
-llm_robot_planner = threading.Thread(target=process_llm_robot_planner, daemon=True)
-llm_robot_planner.start()
+
 
 from flet import Page, app
 from gui.view.real_time_info_view import LLMRobotPlannerRealTimeInfoView
@@ -59,6 +57,10 @@ def main(page: Page):
     planner_info = LLMRobotPlannerRealTimeInfoView(page=page)
     log_system.add_handler(LoggingGUIHandler(planner_info))
     page.add(planner_info)
+    
+    # LLM Robot Planner スレッドの開始
+    llm_robot_planner = threading.Thread(target=process_llm_robot_planner, daemon=True)
+    llm_robot_planner.start()
 
 app(target=main)
 

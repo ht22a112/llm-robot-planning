@@ -22,15 +22,26 @@ class LLMRobotPlanner():
     全体を処理のフローを制御するクラス
     """
     def __init__(self, api_keys: dict, commands: List[Command]):
-        self.llm = UnifiedAIRequestHandler(
+        self._llm = UnifiedAIRequestHandler(
             api_keys=api_keys
         )
         self._commands: Dict[str, Command] = {}
         self._db: DatabaseManager = DatabaseManager() 
-        self._task_service = TaskService(self.llm, self._db)
+        self._task_service = TaskService(self._llm, self._db)
         self._cmd_executor = CommandExecutor(self)
         self._result_evaluator = ResultEvaluator(self._db)
+        
+        #  TODO: テスト
+        from planner.rag import RAG
+        self._rag = RAG(self._db, self._llm)
+        
         self.register_command(commands)
+
+        
+    def init_helper(self):
+        """テスト用初期化メソッド"""
+        self._db.init_helper()
+        
         
     # TODO: あとで削除
     def _get_all_command_discriptions(self) -> List[str]:
@@ -60,9 +71,11 @@ class LLMRobotPlanner():
         Returns:
             tasks: List[TaskRecord]
         """
-        log.event(
-            name="初期化",
-            context=f"ユーザーからの指示: {instruction}")
+        with log.span(name="初期化：") as span:
+            span.input(f"ユーザーからの指示: {instruction}")
+            self.init_helper()
+            span.output("初期化完了")
+            
         
         with log.span(name="タスクの分解：") as span:
             span.input(f"指示: {instruction}")
@@ -108,16 +121,25 @@ class LLMRobotPlanner():
         for task in tasks:
             with log.action(name="タスクの実行：") as action:
                 action.input(f"タスク: {json.dumps(task.to_dict(), indent=4, ensure_ascii=False)}\n")
-                # taskの分解
+                
+                # TODO: RAGテスト
+                with log.span(name="RAGのテスト：") as span:
+                    span.input(f"task: {task.description}")             
+                    r = self._rag._retrieval_document(task.description)
+                    span.output(f"result: {json.dumps(r, indent=4, ensure_ascii=False)}")
+                    
+                # taskの分解（コマンドプランニング）
                 with log.span(name="コマンドプランニング：") as span:
                     # TODO: 簡易実装、あとで変更する
                     span.input(f"task: {task.description}\ntask detail: {task.detail}\n")
-                    action_history = str(json.dumps(self._db.get_all_actions(), indent=4, ensure_ascii=False))
+                    action_history_json = json.dumps(self._db.get_all_actions(), indent=4, ensure_ascii=False)
+                    action_history_json = "\n".join(" " * 8 + line for line in action_history_json.splitlines())
                     commands = self._task_service.split_task(
                         task_description=task.description, 
                         task_detail=task.detail, 
                         cmd_disc_list=self._get_all_command_discriptions(), 
-                        action_history=action_history)
+                        action_history=action_history_json,
+                        knowledge=r)
                     span.output(f"plan: {json.dumps(commands, indent=4, ensure_ascii=False)}\n")
                 
                 task.commands = commands
@@ -127,7 +149,7 @@ class LLMRobotPlanner():
                 for cmdN, cmd in commands.items():
                     logger.info(f"{cmdN}> {cmd['name']}: {cmd['args']}")
                 
-                # taskの実行
+                # taskの実行（コマンドの実行）
                 with log.span(name="コマンドの実行：") as span:
                     span.input(f"commands: {json.dumps(commands, indent=4, ensure_ascii=False)}")
                     # commandの実行

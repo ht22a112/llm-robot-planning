@@ -1,6 +1,8 @@
 from typing import Optional, List, Literal, Dict, Any
 from planner.database.data_type import Location, JobRecord, TaskRecord
 
+from logger.logger import LLMRobotPlannerLogSystem
+log = LLMRobotPlannerLogSystem()
 
 class MemoryDatabase():
     def __init__(self):
@@ -29,33 +31,7 @@ class DatabaseManager():
             db_path=db_path
         )
         
-        #
-        self._init_helper()
-        
-    def _init_helper(self):
-        # TODO: あとで削除 テスト用
-        self.add_location_knowledge(
-            location_id="玄関_001",
-            location_name="玄関",
-            description="家の玄関",
-            x=1.0,
-            y=2.0,
-            z=0.0)
-        self.add_location_knowledge(
-            location_id="キッチン_001",
-            location_name="キッチン",
-            description="家のキッチン",
-            x=4.0,
-            y=5.0,
-            z=0.0)
-        self.add_location_knowledge(
-            location_id="トイレ_001",
-            location_name="トイレ",
-            description="家のトイレ",
-            x=7.0,
-            y=8.0,
-            z=0.0)
-        
+                
     def start_new_job(self, instruction: str, tasks: list[TaskRecord]):
         """
         Args:
@@ -116,9 +92,72 @@ class DatabaseManager():
         return self._location_knowledge.get_all()
     
     
-    def query_document(self, query_text: str, n_results: int = 1):
-        self._document_db.query([query_text], n_results)
+    def query_document(self, query_text: str, n_results: int = 1, distance_threshold: Optional[float] = 1) -> List[str]:
+        query_results = self._document_db.query([query_text], n_results)
+        l = []
+        if query_results["documents"] and query_results["distances"]:
+            for document, distance in zip(query_results["documents"][0], query_results["distances"][0]):
+                if distance_threshold is None or distance < distance_threshold:
+                    l.append(document)
+        return l
+        
     
-    
+    def init_helper(self):
+        """テスト用初期化メソッド"""
+        
+        with log.span("Database initialization") as span:
+            span.input("initialize database")
+            
+            # TODO: あとで削除 テスト用
+            self.add_location_knowledge(
+                location_id="玄関_001",
+                location_name="玄関",
+                description="家の玄関",
+                x=1.0,
+                y=2.0,
+                z=0.0)
+            self.add_location_knowledge(
+                location_id="キッチン_001",
+                location_name="キッチン",
+                description="家のキッチン",
+                x=4.0,
+                y=5.0,
+                z=0.0)
+            self.add_location_knowledge(
+                location_id="トイレ_001",
+                location_name="トイレ",
+                description="家のトイレ",
+                x=7.0,
+                y=8.0,
+                z=0.0)
+            
+            import uuid
+            l = [
+                    "There is one desk in the kitchen.",
+                    "Tanaka and Maeda are having a conversation in the living room.",
+                    "There are shoes at the entrance.",
+                    "There are two desks in the living room.",
+                    "There is a TV in the living room.",
+                    "There is a living room next to the kitchen",
+                    "Mr. Tanaka works as an engineer at a tech company.",
+                    "Mr. Tanaka enjoys hiking on weekends and exploring nature.",
+                    "Mr. Tanaka is fluent in English and Japanese.",
+                    "Mr. Tanaka has a collection of vintage vinyl records, primarily jazz and rock.",
+                    "Mr. Tanaka studied mechanical engineering at a university in Tokyo.",
+                    "Mr. Tanaka is known for his expertise in robotics and artificial intelligence.",
+                    "Mr. Tanaka regularly volunteers at a local animal shelter.",
+                    "Mr. Tanaka is an avid reader and especially enjoys historical fiction.",
+                    "Mr. Tanaka has traveled to over 15 countries, including Italy, Canada, and South Africa.",
+                    "Mr. Tanaka plays the guitar and occasionally performs at local cafes.",
+            ]
+            self._document_db.upsert(
+                l,
+                [
+                    uuid.uuid4().hex for _ in range(len(l))
+                ]
+            )
+            
+            span.output("database initialized")
+        
     
     

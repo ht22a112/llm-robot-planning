@@ -1,9 +1,12 @@
 from typing import Literal, Optional, Union
+import json
 from chromadb import Client, Collection
 from chromadb import Documents, EmbeddingFunction, Embeddings
 
 import google.generativeai as genai
 
+from logger.logger import LLMRobotPlannerLogSystem
+log = LLMRobotPlannerLogSystem()
 
 class GoogleGenerativeAiEmbeddingFunction(EmbeddingFunction[Documents]):
     ############################################
@@ -43,17 +46,6 @@ class GoogleGenerativeAiEmbeddingFunction(EmbeddingFunction[Documents]):
             self._task_title = "Embedding of single string"
 
     def __call__(self, input: Documents) -> Embeddings:
-        # print(self._task_type)
-        # import json
-        # print(
-        #         json.dumps(
-        #             [
-        #                 f"{self._genai.embed_content(model=self._model_name,content=text,task_type=self._task_type,title=self._task_title,)['embedding'][0:6]}" for text in input
-        #             ],
-        #             indent=4,
-        #             ensure_ascii=False,
-        #         )
-        # )
         return [
             self._genai.embed_content(
                 model=self._model_name,
@@ -88,10 +80,17 @@ class ChromaDBWithGemini():
         )
     
     def upsert(self, documents: list[str], ids: list[str]):
-        self._collection.add(documents=documents, ids=ids)
+        with log.span("ChromaDB upsert") as span:
+            span.input(f"{documents}")
+            self._collection.add(documents=documents, ids=ids)
+            span.output(f"upserted: {json.dumps(documents, ensure_ascii=False, indent=4)}")
             
     def query(self, query_texts: list[str], n_results: int = 1):
-        return self._collection.query(query_embeddings=self._retrieval_query_ef(query_texts), n_results=n_results)
+        with log.span("ChromaDB query") as span:
+            span.input(f"{query_texts}")
+            r = self._collection.query(query_embeddings=self._retrieval_query_ef(query_texts), n_results=n_results)
+            span.output(f"result: {json.dumps(r, ensure_ascii=False, indent=4)}")
+        return r
 
 
 if __name__ == "__main__":

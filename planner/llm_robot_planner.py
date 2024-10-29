@@ -134,7 +134,7 @@ class LLMRobotPlanner():
                     span.input(f"task: {task.description}\ntask detail: {task.detail}\n")
                     action_history_json = json.dumps(self._db.get_all_actions(), indent=4, ensure_ascii=False)
                     action_history_json = "\n".join(" " * 8 + line for line in action_history_json.splitlines())
-                    commands = self._task_service.split_task(
+                    commands = self._task_service.generate_command_calls(
                         task_description=task.description, 
                         task_detail=task.detail, 
                         cmd_disc_list=self._get_all_command_discriptions(), 

@@ -21,41 +21,7 @@ class TaskService():
     
     def _get_all_location_knowledge_names(self) -> List[str]:
         return list(set([location.name for location in self._db.get_all_known_locations()]))
-        
-    def split_task(self, task_description: str, task_detail: str, cmd_disc_list: List[str], action_history: str, knowledge: List[str]) -> dict:
-        
-        # コマンド一覧の生成
-        command_discription = "\n".join(f"        {idx}: {content}" for idx, content in enumerate(cmd_disc_list, 1))
-        
-        # 知識一覧の生成
-        k = "\n".join([f'       ・{s}' for s in knowledge])
-        
-        # プロンプトの取得と生成
-        prompt = get_prompt(
-            prompt_name="split_task",
-            replacements={
-                "task_description": task_description,
-                "task_detail": task_detail,
-                "command_discription": command_discription,
-                "action_history": action_history,
-                "knowledge": k, 
-                "location_info": str(self._get_all_location_knowledge_names())
-            },
-            symbol=("{{", "}}")
-        )
-
-        # 生成
-        response = self._json_parser.parse(
-            text=self._llm.generate_content(
-                prompt=prompt, 
-                model_name=None
-            ),
-            response_type="json",
-            convert_type="dict"
-        )
-        return response
-        
-
+    
     def interpret_instruction(self, instruction: str) -> List[TaskRecord]:
         """
         Args:
@@ -92,4 +58,39 @@ class TaskService():
             ) for task in response["tasks"].values()
         ]
         
-    def 
+    def generate_command_calls(self, task_description: str, task_detail: str, cmd_disc_list: List[str], action_history: str, knowledge: List[str]) -> dict:
+        # コマンド一覧の生成
+        command_discription = "\n".join(f"        {idx}: {content}" for idx, content in enumerate(cmd_disc_list, 1))
+        
+        # 知識一覧の生成
+        k = "\n".join([f'       ・{s}' for s in knowledge])
+        
+        # プロンプトの取得と生成
+        prompt = get_prompt(
+            prompt_name="split_task",
+            replacements={
+                "task_description": task_description,
+                "task_detail": task_detail,
+                "command_discription": command_discription,
+                "action_history": action_history,
+                "knowledge": k, 
+                "location_info": str(self._get_all_location_knowledge_names())
+            },
+            symbol=("{{", "}}")
+        )
+
+        # 生成
+        response = self._json_parser.parse(
+            text=self._llm.generate_content(
+                prompt=prompt, 
+                model_name=None
+            ),
+            response_type="json",
+            convert_type="dict"
+        )
+        return response
+
+    
+    
+        
+    

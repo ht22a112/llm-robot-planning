@@ -25,9 +25,10 @@ class DatabaseManager():
         #self.obj_db = ObjectKnowledge(self._sqlite_interface)
         
         #
+        from utils.utils import read_key_value_pairs
         self._document_db = ChromaDBWithGemini(
             embedding_model="models/text-embedding-004",
-            embedding_model_api_key="AIzaSyAuGyhqc1sKSVqBQI6mN7lJd9LDVvY0Z_I",
+            embedding_model_api_key=read_key_value_pairs("key.env")["GEMINI_API_KEY"],
             db_path=db_path
         )
         
@@ -50,7 +51,7 @@ class DatabaseManager():
     def log_robot_action(
         self,
         action: str,
-        status: Literal["succeeded", "failed"],
+        status: Literal["success", "failure"],
         details: Optional[str],
         x: Optional[float],
         y: Optional[float],

@@ -92,7 +92,7 @@ class LLMRobotPlanner():
         # TODO: 簡易実装、あとで変更する
         self._db.log_robot_action(
             action="initialize",
-            status="succeeded",
+            status="success",
             details="ロボットの初期化および行動決定システムの初期化",
             x=None,
             y=None,

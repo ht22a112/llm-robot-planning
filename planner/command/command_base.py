@@ -84,12 +84,12 @@ class Command(ABC):
 class CommandExecutionResult():
     def __init__(
         self,
-        status: Literal["succeeded", "failed"], 
+        status: Literal["success", "failure"], 
         details: str = ""
     ) -> None:
         self.cmd_name = ""
         self.cmd_args: Dict[str, str] = {}
-        self.status: Literal['succeeded', 'failed'] = status
+        self.status: Literal['success', 'failure'] = status
         self.details: str = details
 
     def __str__(self) -> str:

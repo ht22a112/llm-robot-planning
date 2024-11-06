@@ -19,9 +19,9 @@ class MoveCommand(Command):
         result = False
         time.sleep(1) # TODO: 後で消す
         if result:
-            status = "failed"
+            status = "failure"
         else:
-            status = "succeeded"
+            status = "success"
 
         return CommandExecutionResult(
             status=status,
@@ -43,10 +43,10 @@ class FindCommand(Command):
         time.sleep(1) # TODO: 後で消す
         
         if not result:
-            status = "failed"
+            status = "failure"
             message = f"{object} が見つかりません"
         else:
-            status = "succeeded"
+            status = "success"
             message = f"{object}が見つかりました"
         
         return CommandExecutionResult(
@@ -64,7 +64,7 @@ class IntrofuceSelfCommand(Command):
         
     def execute(self, message) -> CommandExecutionResult:
         return CommandExecutionResult(
-            status="succeeded"
+            status="success"
         )
 
 class SpeakMessageCommand(Command):
@@ -78,7 +78,7 @@ class SpeakMessageCommand(Command):
     def execute(self, speak_message) -> CommandExecutionResult:
         time.sleep(1) # TODO: 後で消す
         return CommandExecutionResult(
-            status="succeeded"
+            status="success"
         )   
 
 class AskQuestionCommand(Command):
@@ -92,7 +92,7 @@ class AskQuestionCommand(Command):
     def execute(self, question) -> CommandExecutionResult:
         time.sleep(1) # TODO: 後で消す
         return CommandExecutionResult(
-            status="succeeded"
+            status="success"
         )
 
 class PickUpObjectCommand(Command):
@@ -107,7 +107,7 @@ class PickUpObjectCommand(Command):
     def execute(self, object) -> CommandExecutionResult:
         time.sleep(1) # TODO: 後で消す
         return CommandExecutionResult(
-            status="succeeded"
+            status="success"
         )
     
 class DropObjectCommand(Command):
@@ -122,7 +122,7 @@ class DropObjectCommand(Command):
     def execute(self, object) -> CommandExecutionResult:
         time.sleep(1) # TODO: 後で消す
         return CommandExecutionResult(
-            status="succeeded"
+            status="success"
         )
         
 class ErrorCommand(Command):
@@ -135,5 +135,5 @@ class ErrorCommand(Command):
     
     def execute(self, message) -> CommandExecutionResult:
         return CommandExecutionResult(
-            status="succeeded"
+            status="success"
         )

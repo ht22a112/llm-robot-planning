@@ -58,16 +58,33 @@ class TaskService():
             ) for task in response["tasks"].values()
         ]
         
-    def generate_command_calls(self, task_description: str, task_detail: str, cmd_disc_list: List[str], action_history: str, knowledge: List[str]) -> dict:
+    def generate_command_calls(
+        self, 
+        task_description: str, 
+        task_detail: str,
+        cmd_disc_list: List[str],
+        action_history: str,
+        knowledge: List[str]
+    ) -> dict:
+        """
+        タスクから、そのタスクを実行する為のコマンド（行動）のリストを生成する
+        
+        Args:
+            task_description (str): タスクの内容
+            task_detail (str): タスクの詳細
+            cmd_disc_list (List[str]): コマンドの説明のリスト
+            action_history (str): アクション履歴
+            knowledge (List[str]): 知識のリスト
+        """
         # コマンド一覧の生成
         command_discription = "\n".join(f"        {idx}: {content}" for idx, content in enumerate(cmd_disc_list, 1))
         
         # 知識一覧の生成
-        k = "\n".join([f'       ・{s}' for s in knowledge])
+        k = "\n".join([f'       ・{s}' for s in knowledge]) if knowledge else "       取得した情報はありません"
         
         # プロンプトの取得と生成
         prompt = get_prompt(
-            prompt_name="split_task",
+            prompt_name="generate_commands_from_task",
             replacements={
                 "task_description": task_description,
                 "task_detail": task_detail,
@@ -90,7 +107,37 @@ class TaskService():
         )
         return response
 
-    
+    def regenerate_command_calls(self, task_description: str, task_detail: str, cmd_disc_list: List[str], action_history: str, knowledge: List[str]) -> dict:
+        # コマンド一覧の生成
+        command_discription = "\n".join(f"        {idx}: {content}" for idx, content in enumerate(cmd_disc_list, 1))
+        
+        # 知識一覧の生成
+        k = "\n".join([f'       ・{s}' for s in knowledge]) if knowledge else "       取得した情報はありません"
+        
+        # プロンプトの取得と生成
+        prompt = get_prompt(
+            prompt_name="generate_commands_from_task",
+            replacements={
+                "task_description": task_description,
+                "task_detail": task_detail,
+                "command_discription": command_discription,
+                "action_history": action_history,
+                "knowledge": k, 
+                "location_info": str(self._get_all_location_knowledge_names())
+            },
+            symbol=("{{", "}}")
+        )
+
+        # 生成
+        response = self._json_parser.parse(
+            text=self._llm.generate_content(
+                prompt=prompt, 
+                model_name=None
+            ),
+            response_type="json",
+            convert_type="dict"
+        )
+        return response
     
         
     

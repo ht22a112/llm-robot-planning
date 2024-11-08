@@ -1,6 +1,9 @@
 from typing import Literal, Optional, List, Dict, Any
 import sqlite3
+import json
 
+from planner.database.data_type import Location, Position
+from planner.database.data_type import JobRecord, TaskRecord, CommandRecord, ExecutionResultRecord
 from logger.logger import LLMRobotPlannerLogSystem
 log = LLMRobotPlannerLogSystem()
 
@@ -10,7 +13,6 @@ class SQLiteInterface():
         self._cursor: sqlite3.Cursor
         self._db_path = db_path
         self.connect()
-        self._create_robot_action_history_table()
         
     def connect(self):
         self._conn = sqlite3.connect(self._db_path)
@@ -18,6 +20,302 @@ class SQLiteInterface():
         
     def close(self):
         self._conn.close()
+    
+
+class PlanHistory():
+    def __init__(self, sqlite_interface) -> None:
+        self._sqlite_interface: SQLiteInterface = sqlite_interface
+        self._cursor: sqlite3.Cursor = sqlite_interface._cursor
+        self._conn: sqlite3.Connection = sqlite_interface._conn
+        self.initialize_database()
+                
+    def initialize_database(self):
+        # 外部キー制約を有効化
+        self._cursor.execute("PRAGMA foreign_keys = ON;")
+        
+        # TODO: あとで変更
+        self._cursor.execute('''DROP TABLE IF EXISTS Jobs''')
+        self._cursor.execute('''DROP TABLE IF EXISTS Tasks''')
+        self._cursor.execute('''DROP TABLE IF EXISTS Commands''')
+        self._cursor.execute('''DROP TABLE IF EXISTS InstructionExecutionResults''')
+        self._cursor.execute('''DROP TABLE IF EXISTS TaskExecutionResults''')
+        self._cursor.execute('''DROP TABLE IF EXISTS CommandExecutionResults''')
+        self._cursor.execute('''DROP TABLE IF EXISTS ReplanningEvents''')
+    
+        # Jobs テーブル
+        self._cursor.execute('''
+            CREATE TABLE IF NOT EXISTS Jobs (
+                job_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                content TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                is_active BOOLEAN NOT NULL DEFAULT 1,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Tasks テーブル
+        self._cursor.execute('''
+            CREATE TABLE IF NOT EXISTS Tasks (
+                task_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id INTEGER NOT NULL,
+                sequence_number INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                is_active BOOLEAN NOT NULL DEFAULT 1,
+                task_name TEXT NOT NULL,
+                task_details TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (job_id) REFERENCES Jobs(job_id)
+            )
+        ''')
+        
+        # Commands テーブル
+        self._cursor.execute('''
+            CREATE TABLE IF NOT EXISTS Commands (
+                command_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id INTEGER NOT NULL,
+                sequence_number INTEGER NOT NULL,
+                action TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                is_active BOOLEAN NOT NULL DEFAULT 1,
+                command_description TEXT,
+                command_args TEXT,  -- JSON形式で引数を保持
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (task_id) REFERENCES Tasks(task_id)
+            )
+        ''')
+        
+        # ExecutionResults テーブル（Instruction用）
+        self._cursor.execute('''
+            CREATE TABLE IF NOT EXISTS InstructionExecutionResults (
+                job_id INTEGER PRIMARY KEY,
+                result TEXT NOT NULL,
+                error_message TEXT,
+                detailed_info TEXT,
+                start_time DATETIME,
+                end_time DATETIME,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (job_id) REFERENCES Jobs(job_id)
+            )
+        ''')
+        
+        # ExecutionResults テーブル（Task用）
+        self._cursor.execute('''
+            CREATE TABLE IF NOT EXISTS TaskExecutionResults (
+                task_id INTEGER PRIMARY KEY,
+                result TEXT NOT NULL,
+                error_message TEXT,
+                detailed_info TEXT,
+                start_time DATETIME,
+                end_time DATETIME,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (task_id) REFERENCES Tasks(task_id)
+            )
+        ''')
+        
+        # ExecutionResults テーブル（Command用）
+        self._cursor.execute('''
+            CREATE TABLE IF NOT EXISTS CommandExecutionResults (
+                command_id INTEGER PRIMARY KEY,
+                result TEXT NOT NULL,
+                error_message TEXT,
+                detailed_info TEXT,
+                start_time DATETIME,
+                end_time DATETIME,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (command_id) REFERENCES Commands(command_id)
+            )
+        ''')
+        
+        # ReplanningEvents テーブル
+        self._cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ReplanningEvents (
+                replanning_event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id INTEGER NOT NULL,
+                trigger_task_id INTEGER,
+                trigger_command_id INTEGER,
+                reason TEXT NOT NULL,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (job_id) REFERENCES Jobs(job_id),
+                FOREIGN KEY (trigger_task_id) REFERENCES Tasks(task_id),
+                FOREIGN KEY (trigger_command_id) REFERENCES Commands(command_id)
+            )
+        ''')
+        self._conn.commit()
+
+    def add_job(self, job: JobRecord) -> int:
+        """
+        Jobを追加する
+        
+        Args:
+            job: JobRecord ジョブ情報
+            
+        Returns:
+            int: 追加したJobのUID
+        """
+        
+        self._cursor.execute('''
+            INSERT INTO Jobs (content, status, is_active, timestamp)
+            VALUES (?, ?, ?, ?)
+        ''', (
+            job.action,
+            job.status,
+            job.is_active,
+            job.timestamp.isoformat()
+        ))
+        job_id = self._cursor.lastrowid
+        self._conn.commit()
+        return job_id
+
+    def add_task(self, task: TaskRecord, job_id: int) -> int:
+        """
+        Taskを追加する
+        
+        Args:
+            task: TaskRecord タスク情報
+            job_id: int タスクが属するジョブのUID
+        
+        Returns:
+            task_id: int 追加したTaskのUID
+        """
+        
+        self._cursor.execute('''
+            INSERT INTO Tasks (job_id, sequence_number, status, is_active, task_name, task_details, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            job_id,
+            task.sequence_number,
+            task.status,
+            task.is_active,
+            task.action,
+            task.additional_info,
+            task.timestamp.isoformat()
+        ))
+        task_id = self._cursor.lastrowid
+        self._conn.commit()
+        return task_id
+
+    def add_command(
+        self, 
+        command: CommandRecord,
+        task_id: int
+    ) -> int:
+        """
+        コマンドを追加する
+        
+        Args:
+            command: CommandRecord コマンド情報
+            task_id: int コマンドが属するタスクのUID
+        
+        Returns:
+            command_id: int 追加したCommandのUID
+        """
+        command_args_json = json.dumps(command.args) if command.args else None
+        self._cursor.execute('''
+            INSERT INTO Commands (task_id, sequence_number, action, status, is_active, command_description, command_args, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            task_id,
+            command.sequence_number,
+            command.action,
+            command.status,
+            command.is_active,
+            command.additional_info,
+            command_args_json,
+            command.timestamp.isoformat()
+        ))
+        command_id = self._cursor.lastrowid
+        self._conn.commit()
+        return command_id
+
+    def add_execution_result(
+        self, 
+        execution_result: ExecutionResultRecord, 
+        entity_type: str, 
+        entity_id: int
+    ):
+        """
+        Args:
+            execution_result: ExecutionResultRecord 実行結果
+            entity_type: 'instruction', 'task', 'command'
+            entity_id: 対応するID
+        
+        Return:
+            None
+        """
+        if entity_type == 'instruction':
+            self._cursor.execute('''
+                INSERT INTO InstructionExecutionResults (job_id, result, error_message, detailed_info, start_time, end_time, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                entity_id,
+                execution_result.result,
+                execution_result.error_message,
+                execution_result.detailed_info,
+                execution_result.start_time.isoformat() if execution_result.start_time else None,
+                execution_result.end_time.isoformat() if execution_result.end_time else None,
+                execution_result.timestamp.isoformat()
+            ))
+        elif entity_type == 'task':
+            self._cursor.execute('''
+                INSERT INTO TaskExecutionResults (task_id, result, error_message, detailed_info, start_time, end_time, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                entity_id,
+                execution_result.result,
+                execution_result.error_message,
+                execution_result.detailed_info,
+                execution_result.start_time.isoformat() if execution_result.start_time else None,
+                execution_result.end_time.isoformat() if execution_result.end_time else None,
+                execution_result.timestamp.isoformat()
+            ))
+        elif entity_type == 'command':
+            self._cursor.execute('''
+                INSERT INTO CommandExecutionResults (command_id, result, error_message, detailed_info, start_time, end_time, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                entity_id,
+                execution_result.result,
+                execution_result.error_message,
+                execution_result.detailed_info,
+                execution_result.start_time.isoformat() if execution_result.start_time else None,
+                execution_result.end_time.isoformat() if execution_result.end_time else None,
+                execution_result.timestamp.isoformat()
+            ))
+        else:
+            raise ValueError("Invalid entity_type. Must be 'instruction', 'task', or 'command'.")
+        
+        self._conn.commit()
+        
+
+    def add_replanning_event(self, replanning_event: dict) -> int:
+        """
+        replanning_event: {
+            'job_id': int,
+            'trigger_task_id': Optional[int],
+            'trigger_command_id': Optional[int],
+            'reason': str
+        }
+        """
+        self._cursor.execute('''
+            INSERT INTO ReplanningEvents (job_id, trigger_task_id, trigger_command_id, reason)
+            VALUES (?, ?, ?, ?)
+        ''', (
+            replanning_event['job_id'],
+            replanning_event.get('trigger_task_id'),
+            replanning_event.get('trigger_command_id'),
+            replanning_event['reason']
+        ))
+        replanning_event_id = self._cursor.lastrowid
+        self._conn.commit()
+        return replanning_event_id
+    
+    
+class ActionHistory():
+    def __init__(self, sqlite_interface: SQLiteInterface):
+        self._sqlite_interface: SQLiteInterface = sqlite_interface
+        self._cursor: sqlite3.Cursor = sqlite_interface._cursor
+        self._conn: sqlite3.Connection = sqlite_interface._conn
+        self._create_robot_action_history_table()
         
     def _create_robot_action_history_table(self):
         # TODO: 後で過去のデーターベースの削除や保存方法の変更
@@ -37,13 +335,13 @@ class SQLiteInterface():
         
     def log_robot_action(self,
         action: str,
-        status: Literal["succeeded", "failed"],
+        status: Literal["success", "failure"],
         details: Optional[str],
         x: Optional[float],
         y: Optional[float],
         z: Optional[float],
         timestamp: Optional[float] = None,    
-    ):
+    ):      
         """
         ロボットの行動を記録
 
@@ -70,7 +368,7 @@ class SQLiteInterface():
         ))
         self._conn.commit()
 
-    def get_all_actions(self) -> List[Dict[str, Any]]:
+    def get_all(self) -> List[Dict[str, Any]]:
         """すべての行動履歴を取得する。"""
         with log.span(name="ロボットの行動履歴を取得") as span:
             span.input("get_all_action_history") 
@@ -99,6 +397,9 @@ class SQLiteInterface():
             span.output(f"successfully get {len(actions)} actions")
         return actions
 
+
+
+# Knowledge
 
 class Knowledge():
     pass
@@ -157,6 +458,7 @@ class LocationKnowledge(Knowledge):
         self._sqlite_interface: SQLiteInterface = sqlite_interface
         self._cursor: sqlite3.Cursor = sqlite_interface._cursor
         self._conn: sqlite3.Connection = sqlite_interface._conn
+        self._create_table()
         
     def _create_table(self):
         """テーブルを作成（存在しない場合のみ）"""
@@ -174,7 +476,7 @@ class LocationKnowledge(Knowledge):
             )
         ''')
  
-    def insert(self, 
+    def add(self, 
         location_id: str, 
         location_name: str, 
         description: str, 
@@ -231,7 +533,7 @@ class LocationKnowledge(Knowledge):
     def get(self, ):
         pass
     
-    def get_all(self) -> list:
+    def get_all(self) -> List[Location]:
         """
         すべてのロケーション情報を取得する
         
@@ -249,15 +551,13 @@ class LocationKnowledge(Knowledge):
             
             span.output(f"successfully get {len(rows)} locations")
             return [
-                {
-                    'location_id': row[0],
-                    'location_name': row[1],
-                    'description': row[2],
-                    'x': row[3],
-                    'y': row[4],
-                    'z': row[5],
-                    'timestamp': row[6]
-                } for row in rows
+                Location(
+                    uid=row[0],
+                    name=row[1],
+                    description=row[2],
+                    position=Position(row[3], row[4], row[5]),
+                    timestamp=row[6]
+                ) for row in rows
             ]
         
     

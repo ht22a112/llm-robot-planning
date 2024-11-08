@@ -81,7 +81,7 @@ class LLMRobotPlanner():
         with log.span(name="タスクの分解：") as span:
             span.input(f"指示: {instruction}")
             tasks = self._task_service.interpret_instruction(instruction)
-            span.output("\n".join(f"タスク{i}:\n    タスクの説明: {task.content}\n    タスクの詳細: {task.details}" for i, task in enumerate(tasks, 1)))
+            span.output("\n".join(f"タスク{i}:\n    タスクの説明: {task.action}\n    タスクの詳細: {task.additional_info}" for i, task in enumerate(tasks, 1)))
         logger.info(
             f"[*]initialize >> create new job\n"
             f"[-]instruction: {instruction}\n"
@@ -125,36 +125,36 @@ class LLMRobotPlanner():
                 
                 # TODO: RAGテスト
                 with log.span(name="RAGのテスト：") as span:
-                    span.input(f"task: {task.content}")             
-                    r = self._rag._retrieval_document(task.content)
+                    span.input(f"task: {task.action}")             
+                    r = self._rag._retrieval_document(task.action)
                     span.output(f"result: {to_json_str(r)}")
                     
                 # taskの分解（コマンドプランニング）
                 with log.span(name="コマンドプランニング：") as span:
                     # TODO: 簡易実装、あとで変更する
-                    span.input(f"task: {task.content}\ntask detail: {task.details}")
+                    span.input(f"task: {task.action}\ntask detail: {task.additional_info}")
                     action_history_json = to_json_str(self._db.get_all_actions())
                     action_history_json = "\n".join(" " * 8 + line for line in action_history_json.splitlines())
                     commands = self._task_service.generate_command_calls(
-                        task_description=task.content, 
-                        task_detail=task.details, 
+                        task_description=task.action, 
+                        task_detail=task.additional_info, 
                         cmd_disc_list=self._get_all_command_discriptions(), 
                         action_history=action_history_json,
                         knowledge=r)
                     span.output(f"plan: {to_json_str(commands)}")
                 
                 task.commands = commands
-                logger.info(f"task description: {task.content}\n"
-                            f"task detail: {task.details}\n")
+                logger.info(f"task description: {task.action}\n"
+                            f"task detail: {task.additional_info}\n")
                 for cmd in commands:
-                    logger.info(f"{cmd.sequence_number}> {cmd.content}: {cmd.args}")
+                    logger.info(f"{cmd.sequence_number}> {cmd.action}: {cmd.args}")
                 
                 # taskの実行（コマンドの実行）
                 with log.span(name="コマンドの実行：") as span:
                     span.input(f"commands: {to_json_str(commands)}")
                     # commandの実行
                     for cmd in commands:
-                        cmd_name = cmd.content
+                        cmd_name = cmd.action
                         cmd_args = cmd.args
                         
                         logger.info(f"[EXEC] {cmd}: {cmd_name}")

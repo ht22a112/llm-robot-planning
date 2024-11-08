@@ -1,5 +1,4 @@
 from typing import List, Union, Dict
-import json
 
 from planner.llm.gen_ai import UnifiedAIRequestHandler
 
@@ -10,6 +9,8 @@ from planner.database.database import DatabaseManager
 from planner.database.data_type import TaskRecord
 from planner.task_service import TaskService
 from planner.result_evaluator import ResultEvaluator
+
+from utils.utils import to_json_str
 
 from logger.logger import LLMRobotPlannerLogSystem
 log = LLMRobotPlannerLogSystem()
@@ -120,19 +121,19 @@ class LLMRobotPlanner():
         # tasksの実行
         for task in tasks:
             with log.action(name="タスクの実行：") as action:
-                action.input(f"タスク: {task.to_json_str()}\n")
+                action.input(f"タスク: {task.to_json_str()}")
                 
                 # TODO: RAGテスト
                 with log.span(name="RAGのテスト：") as span:
                     span.input(f"task: {task.content}")             
                     r = self._rag._retrieval_document(task.content)
-                    span.output(f"result: {json.dumps(r, indent=4, ensure_ascii=False)}")
+                    span.output(f"result: {to_json_str(r)}")
                     
                 # taskの分解（コマンドプランニング）
                 with log.span(name="コマンドプランニング：") as span:
                     # TODO: 簡易実装、あとで変更する
-                    span.input(f"task: {task.content}\ntask detail: {task.details}\n")
-                    action_history_json = json.dumps(self._db.get_all_actions(), indent=4, ensure_ascii=False)
+                    span.input(f"task: {task.content}\ntask detail: {task.details}")
+                    action_history_json = to_json_str(self._db.get_all_actions())
                     action_history_json = "\n".join(" " * 8 + line for line in action_history_json.splitlines())
                     commands = self._task_service.generate_command_calls(
                         task_description=task.content, 
@@ -140,7 +141,7 @@ class LLMRobotPlanner():
                         cmd_disc_list=self._get_all_command_discriptions(), 
                         action_history=action_history_json,
                         knowledge=r)
-                    span.output(f"plan: {json.dumps([cmd.to_dict() for cmd in commands], indent=4, default=str, ensure_ascii=False)}\n")
+                    span.output(f"plan: {to_json_str(commands)}")
                 
                 task.commands = commands
                 logger.info(f"task description: {task.content}\n"
@@ -150,7 +151,7 @@ class LLMRobotPlanner():
                 
                 # taskの実行（コマンドの実行）
                 with log.span(name="コマンドの実行：") as span:
-                    span.input(f"commands: {json.dumps([cmd.to_dict() for cmd in commands], indent=4, default=str, ensure_ascii=False)}\n")
+                    span.input(f"commands: {to_json_str(commands)}")
                     # commandの実行
                     for cmd in commands:
                         cmd_name = cmd.content

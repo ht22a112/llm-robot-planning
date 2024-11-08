@@ -1,5 +1,5 @@
 # from __future__ import annotations # python ver3.7 ~ 3.10は必要
-import json
+from utils.utils import to_json_str
 
 from planner.command.command_base import Command, CommandExecutionResult
 import planner.llm_robot_planner as _root
@@ -29,7 +29,7 @@ class CommandExecutor:
             CommandExecutionResult
         """
         with log.action(f"コマンド: {command_name}") as action:
-            action.input("args: " + json.dumps(args, indent=2, ensure_ascii=False))
+            action.input("args: " + to_json_str(args))
             cmd = self._get_command(command_name)
             # コマンドの実行
             cmd.on_enter()

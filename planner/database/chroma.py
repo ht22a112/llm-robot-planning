@@ -1,7 +1,9 @@
-from typing import Literal, Optional, Union
-import json
+from typing import Literal, Optional, Union, List
+
 from chromadb import Client, Collection
 from chromadb import Documents, EmbeddingFunction, Embeddings
+
+from utils.utils import to_json_str
 
 import google.generativeai as genai
 
@@ -79,17 +81,17 @@ class ChromaDBWithGemini():
             embedding_function=self._retrieval_doc_ef, # type: ignore
         )
     
-    def upsert(self, documents: list[str], ids: list[str]):
+    def upsert(self, documents: List[str], ids: List[str]):
         with log.span("ChromaDB upsert") as span:
             span.input(f"{documents}")
             self._collection.add(documents=documents, ids=ids)
-            span.output(f"upserted: {json.dumps(documents, ensure_ascii=False, indent=4)}")
+            span.output(f"upserted: {to_json_str(documents, ensure_ascii=False, indent=4)}")
             
-    def query(self, query_texts: list[str], n_results: int = 1):
+    def query(self, query_texts: List[str], n_results: int = 1):
         with log.span("ChromaDB query") as span:
             span.input(f"{query_texts}")
             r = self._collection.query(query_embeddings=self._retrieval_query_ef(query_texts), n_results=n_results)
-            span.output(f"result: {json.dumps(r, ensure_ascii=False, indent=4)}")
+            span.output(f"result: {to_json_str(r)}")
         return r
 
 

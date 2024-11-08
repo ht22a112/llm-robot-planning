@@ -4,7 +4,7 @@ from planner.llm.parser import JsonParser
 from planner.database.database import DatabaseManager
 from prompts.utils import get_prompt
 
-from planner.database.data_type import TaskRecord # TODO: 後に削除
+from planner.database.data_type import TaskRecord, CommandRecord
 
 from logger.logger import LLMRobotPlannerLogSystem
 log = LLMRobotPlannerLogSystem()
@@ -28,7 +28,7 @@ class TaskService():
             instruction: str ユーザーからの指示（最初にロボットに与える命令）
         
         Returns:
-            List[TaskRecord]: ロボットに与える命令のリスト
+            List[TaskRecord]: タスクのリスト
         """
         
         obtainable_information_list = "".join(f'・{name}\n' for name in self._get_all_knowledge_names())
@@ -49,13 +49,17 @@ class TaskService():
             response_type="json",
             convert_type="dict"
         )
-            
+        
+        #TODO: ここでresponseの内容と形式が合っているか確認する処理の追加
+        
         return [
             TaskRecord(
-                description=task.get("description"), 
-                detail=task.get("detail"),
-                required_info=task.get("required information")
-            ) for task in response["tasks"].values()
+                sequence_number=i,
+                content=task.get("description"), 
+                details=task.get("detail"),
+                status="pending",
+                is_active=True
+            ) for i, task in enumerate(response["tasks"].values())
         ]
         
     def generate_command_calls(
@@ -65,7 +69,7 @@ class TaskService():
         cmd_disc_list: List[str],
         action_history: str,
         knowledge: List[str]
-    ) -> dict:
+    ) -> List[CommandRecord]:
         """
         タスクから、そのタスクを実行する為のコマンド（行動）のリストを生成する
         
@@ -75,6 +79,9 @@ class TaskService():
             cmd_disc_list (List[str]): コマンドの説明のリスト
             action_history (str): アクション履歴
             knowledge (List[str]): 知識のリスト
+        
+        Returns:
+            List[CommandRecord]: コマンドのリスト
         """
         # コマンド一覧の生成
         command_discription = "\n".join(f"        {idx}: {content}" for idx, content in enumerate(cmd_disc_list, 1))
@@ -97,6 +104,13 @@ class TaskService():
         )
 
         # 生成
+        # response = {
+        #   "commandN": {
+        #       "name": "command_name",
+        #       "args": {
+        #           "arg1_name": "value1",
+        #           "arg2_name": "value2",
+        # } 
         response = self._json_parser.parse(
             text=self._llm.generate_content(
                 prompt=prompt, 
@@ -105,7 +119,18 @@ class TaskService():
             response_type="json",
             convert_type="dict"
         )
-        return response
+        
+        return [
+            CommandRecord(
+                sequence_number=i,
+                content=d["name"],
+                details="",
+                args=d["args"],
+                status="pending",
+                is_active=True
+            ) for i, d in enumerate(response.values())
+        ]
+            
 
     def regenerate_command_calls(self, task_description: str, task_detail: str, cmd_disc_list: List[str], action_history: str, knowledge: List[str]) -> dict:
         # コマンド一覧の生成

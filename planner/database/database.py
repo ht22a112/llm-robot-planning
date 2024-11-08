@@ -33,7 +33,7 @@ class DatabaseManager():
         )
         
                 
-    def start_new_job(self, instruction: str, tasks: list[TaskRecord]):
+    def start_new_job(self, instruction: str, tasks: List[TaskRecord]):
         """
         Args:
             instruction: str ユーザーからの指示（最初にロボットに与える命令）
@@ -41,7 +41,8 @@ class DatabaseManager():
             None
         """
         self._memory_db.current_job = JobRecord(
-            instruction=instruction,
+            content=instruction,
+            details="",
             tasks=tasks
         )
         

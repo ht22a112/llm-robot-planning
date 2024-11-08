@@ -80,7 +80,7 @@ class LLMRobotPlanner():
         with log.span(name="タスクの分解：") as span:
             span.input(f"指示: {instruction}")
             tasks = self._task_service.interpret_instruction(instruction)
-            span.output("\n".join(f"タスク{i}:\n    タスクの説明: {task.description}\n    タスクの詳細: {task.detail}\n    required_info: {task.required_info}" for i, task in enumerate(tasks, 1)))
+            span.output("\n".join(f"タスク{i}:\n    タスクの説明: {task.content}\n    タスクの詳細: {task.details}" for i, task in enumerate(tasks, 1)))
         logger.info(
             f"[*]initialize >> create new job\n"
             f"[-]instruction: {instruction}\n"
@@ -120,44 +120,43 @@ class LLMRobotPlanner():
         # tasksの実行
         for task in tasks:
             with log.action(name="タスクの実行：") as action:
-                action.input(f"タスク: {json.dumps(task.to_dict(), indent=4, ensure_ascii=False)}\n")
+                action.input(f"タスク: {task.to_json_str()}\n")
                 
                 # TODO: RAGテスト
                 with log.span(name="RAGのテスト：") as span:
-                    span.input(f"task: {task.description}")             
-                    r = self._rag._retrieval_document(task.description)
+                    span.input(f"task: {task.content}")             
+                    r = self._rag._retrieval_document(task.content)
                     span.output(f"result: {json.dumps(r, indent=4, ensure_ascii=False)}")
                     
                 # taskの分解（コマンドプランニング）
                 with log.span(name="コマンドプランニング：") as span:
                     # TODO: 簡易実装、あとで変更する
-                    span.input(f"task: {task.description}\ntask detail: {task.detail}\n")
+                    span.input(f"task: {task.content}\ntask detail: {task.details}\n")
                     action_history_json = json.dumps(self._db.get_all_actions(), indent=4, ensure_ascii=False)
                     action_history_json = "\n".join(" " * 8 + line for line in action_history_json.splitlines())
                     commands = self._task_service.generate_command_calls(
-                        task_description=task.description, 
-                        task_detail=task.detail, 
+                        task_description=task.content, 
+                        task_detail=task.details, 
                         cmd_disc_list=self._get_all_command_discriptions(), 
                         action_history=action_history_json,
                         knowledge=r)
-                    span.output(f"plan: {json.dumps(commands, indent=4, ensure_ascii=False)}\n")
+                    span.output(f"plan: {json.dumps([cmd.to_dict() for cmd in commands], indent=4, default=str, ensure_ascii=False)}\n")
                 
                 task.commands = commands
-                logger.info(f"task description: {task.description}\n"
-                            f"task detail: {task.detail}\n"
-                            f"required_info: {task.required_info}")
-                for cmdN, cmd in commands.items():
-                    logger.info(f"{cmdN}> {cmd['name']}: {cmd['args']}")
+                logger.info(f"task description: {task.content}\n"
+                            f"task detail: {task.details}\n")
+                for cmd in commands:
+                    logger.info(f"{cmd.sequence_number}> {cmd.content}: {cmd.args}")
                 
                 # taskの実行（コマンドの実行）
                 with log.span(name="コマンドの実行：") as span:
-                    span.input(f"commands: {json.dumps(commands, indent=4, ensure_ascii=False)}")
+                    span.input(f"commands: {json.dumps([cmd.to_dict() for cmd in commands], indent=4, default=str, ensure_ascii=False)}\n")
                     # commandの実行
-                    for cmdN, cmd in commands.items():
-                        cmd_name = cmd["name"]
-                        cmd_args = cmd["args"]
+                    for cmd in commands:
+                        cmd_name = cmd.content
+                        cmd_args = cmd.args
                         
-                        logger.info(f"[EXEC] {cmdN}: {cmd_name}")
+                        logger.info(f"[EXEC] {cmd}: {cmd_name}")
                         exec_result = self._cmd_executor.execute_command(cmd_name, cmd_args)
                         logger.info(f"[RESULT] {exec_result}")
                         self._result_evaluator.evaluate(exec_result)

@@ -1,4 +1,7 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field, asdict
+from typing import Optional, Dict, List, Union, Literal, Any
+from datetime import datetime, timezone
+from utils.utils import to_json_str
 
 @dataclass(frozen=True)
 class Position():
@@ -33,53 +36,66 @@ class Location():
     
 
 
-# Record
-class CommandRecord():
-    def __init__(
-        self,
-        name,
-        details,
-        status,
-        position,
-        timestamp,
-    ):
-        self.name = name
-        self.details = details
-        self.status = status
-        self.postion = position
-        self.timestamp = timestamp
-    
-    
-class TaskRecord():
-    def __init__(
-        self, 
-        description: str,
-        detail: str,
-        required_info: list[str] = [],
-    ):
-        self.description: str = description
-        self.detail: str = detail
-        self.required_info = required_info
-        self.status = None
-        self.commands = {}
-        
-    def __str__(self):
-        return f"[description:{self.description}, required_info:{self.required_info}]"
-    def __repr__(self):
-        return self.__str__()
+# Records
+@dataclass
+class _DataRecordBase():
+    def __json__(self) -> dict:
+        return self.to_dict()
     
     def to_dict(self):
-        return {
-            "description": self.description,
-            "detail": self.detail,
-            "required_info": self.required_info
-        }
-        
-class JobRecord():
-    def __init__(
-        self,
-        instruction: str,
-        tasks: list[TaskRecord]
-    ):
-        self.instruction: str = instruction
-        self.tasks: list[TaskRecord] = tasks
+        """データクラスを辞書に変換する(asdict()のラッパー)"""
+        return asdict(self)
+    
+    def to_json_str(self, **kwarg) -> str:
+        """データクラスをJSON文字列に変換する"""
+        return to_json_str(self, **kwarg)
+
+@dataclass  
+class _TimeRecord(_DataRecordBase):
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+    def __json__(self) -> dict:
+        d = super().__json__()
+        d["timestamp"] = self.timestamp.isoformat()
+        return d
+    
+@dataclass
+class _ContentRecord(_DataRecordBase):
+    content: str
+    details: str
+    
+@dataclass
+class _SequenceRecord(_DataRecordBase):
+    sequence_number: int
+
+@dataclass
+class ExecutionResultRecord(_TimeRecord, _DataRecordBase):
+    result: str = ""
+    error_message: Optional[str] = None
+    detailed_info: Optional[str] = None
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    
+@dataclass
+class CommandRecord(_TimeRecord, _ContentRecord, _SequenceRecord):
+    args: Dict[str, str] = field(default_factory=dict)
+    status: Union[Literal["pending"], Literal["success"], Literal["failure"]] = "pending"
+    is_active: bool = True
+    command_id: Optional[int] = None  # DBからの自動生成ID
+    execution_result: Optional[ExecutionResultRecord] = None
+    
+@dataclass
+class TaskRecord(_TimeRecord, _ContentRecord, _SequenceRecord):
+    status: Union[Literal["pending"], Literal["success"], Literal["failure"]] = "pending"
+    is_active: bool = True
+    task_id: Optional[int] = None  # DBからの自動生成ID
+    execution_result: Optional[ExecutionResultRecord] = None  # Taskの実行結果
+    commands: List[CommandRecord] = field(default_factory=list)
+    
+@dataclass
+class JobRecord(_TimeRecord, _ContentRecord):
+    job_id: Optional[int] = None  # DBからの自動生成ID
+    status: Union[Literal["pending"], Literal["success"], Literal["failure"]] = "pending"
+    is_active: bool = True
+    execution_result: Optional[ExecutionResultRecord] = None  # Instructionの実行結果
+    tasks: List[TaskRecord] = field(default_factory=list)

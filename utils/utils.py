@@ -59,17 +59,30 @@ def replace_placeholders(input_string: str, replacements: Dict[str, str], symbol
     return pattern.sub(replace, input_string)
 
 
-def pretty_print_nested_dict(nested_dict: dict):
-  """入れ子になっているdictを綺麗にインデントをつけてstringで出力する関数
-
-  Args:
-    nested_dict: 入れ子になっているdict
-
-  Returns:
-    綺麗にインデントされたstring
-  """
-  return json.dumps(nested_dict, indent=2, ensure_ascii=False)
-
+class Encoder(json.JSONEncoder):
+    def __init__(self, *args, **kwargs):
+        self._default = kwargs.pop('default', None)
+        super().__init__(*args, **kwargs)
+        
+    def default(self, obj):
+        if hasattr(obj, '__json__'):
+            return obj.__json__()
+        if self._default:
+            return self._default(obj)
+        return super().default(obj)
+    
+def to_json_str(obj, indent=4, default=str, cls=Encoder, ensure_ascii=False, **kwds) -> str:
+    """
+    辞書オブジェクトをJSON形式の文字列に変換する関数。
+    引数指定無しの場合は、indent=4, default=str, ensure_ascii=Falseがデフォルトで設定される。
+    また、__json__()メソッドがオブジェクトに存在する場合は、そのメソッドを使用して変換を行うEncoderがデフォルトで設定されている。
+    
+    Args:
+        json.dumps()の引数と同じ。
+    Returns:
+        str: JSON形式の文字列。
+    """
+    return json.dumps(obj, indent=indent, default=default, cls=cls, ensure_ascii=ensure_ascii, **kwds)
 
 # def remove_json_markers(self, json_str):
 #     """

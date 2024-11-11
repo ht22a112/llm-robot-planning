@@ -61,7 +61,7 @@ class _TimeRecord(_DataRecordBase):
     
 @dataclass
 class _ContentRecord(_DataRecordBase):
-    action: str
+    description: str
     additional_info: str
     
 @dataclass
@@ -70,18 +70,30 @@ class _SequenceRecord(_DataRecordBase):
 
 @dataclass
 class ExecutionResultRecord(_TimeRecord, _DataRecordBase):
-    result: str = ""
-    error_message: Optional[str] = None
+    uid: Optional[int] = None
+    status: Union[Literal["success"], Literal["failure"]] = "success"
     detailed_info: Optional[str] = None
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
     
+    def __json__(self) -> dict:
+        d = super().__json__()
+        d["start_time"] = self.start_time.isoformat() if self.start_time else None
+        d["end_time"] = self.end_time.isoformat() if self.end_time else None
+        return d
+
+@dataclass
+class CommandExecutionResultRecord(ExecutionResultRecord):
+    x: Optional[float] = None
+    y: Optional[float] = None
+    z: Optional[float] = None
+       
 @dataclass
 class CommandRecord(_TimeRecord, _ContentRecord, _SequenceRecord):
     uid: Optional[int] = None  # DBからの自動生成ID
     status: Union[Literal["pending"], Literal["success"], Literal["failure"]] = "pending"
     is_active: bool = True
-    execution_result: Optional[ExecutionResultRecord] = None
+    execution_result: Optional[CommandExecutionResultRecord] = None
     args: Dict[str, str] = field(default_factory=dict)
     
 @dataclass

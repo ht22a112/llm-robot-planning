@@ -11,19 +11,19 @@ class Command(ABC):
     def __init__(
         self, 
         name: str, 
-        discription: str,
-        execute_args_discription: Dict[str, str],
+        description: str,
+        execute_args_description: Dict[str, str],
         execute_required_known_arguments: List[str] = [],
     ) -> None:
         self.__name: str = name
-        self.__discription: str = discription
-        self.__execute_args_discription: Dict[str, str] = execute_args_discription
+        self.__description: str = description
+        self.__execute_args_description: Dict[str, str] = execute_args_description
         self.__execute_required_known_args: List[str] = execute_required_known_arguments
         
-        if not isinstance(execute_args_discription, dict):
-            raise TypeError("execute_args_discription must be dict")
-        if set(execute_args_discription.keys()) != set(self.__get_method_arguments('execute')):
-            raise ValueError("execute and execute_args_discription must be same as method arguments")
+        if not isinstance(execute_args_description, dict):
+            raise TypeError("execute_args_description must be dict")
+        if set(execute_args_description.keys()) != set(self.__get_method_arguments('execute')):
+            raise ValueError("execute and execute_args_description must be same as method arguments")
         
     @property
     def name(self) -> str:
@@ -31,15 +31,15 @@ class Command(ABC):
         return self.__name
     
     @property
-    def discription(self) -> str:
+    def description(self) -> str:
         cmd_name = self.__name
-        cmd_discription = self.__discription
-        exec_args_discription = self.__execute_args_discription
+        cmd_description = self.__description
+        exec_args_description = self.__execute_args_description
         exec_args_list = self.__get_method_arguments('execute')
         
         args_str = ""
         for exec_arg in exec_args_list:
-            arg_desc = exec_args_discription[exec_arg]
+            arg_desc = exec_args_description[exec_arg]
             args_str += f" {exec_arg}: {arg_desc},"
         args_str = args_str[:-1]
         
@@ -49,7 +49,7 @@ class Command(ABC):
         else:
             required_args_str = ""
             
-        return f'"{cmd_name}":, args:{args_str}  # {cmd_discription} {required_args_str}'
+        return f'"{cmd_name}":, args:{args_str}  # {cmd_description} {required_args_str}'
     
     @property
     def required_known_arguments(self) -> list[str]:

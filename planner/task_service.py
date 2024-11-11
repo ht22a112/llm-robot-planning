@@ -55,7 +55,7 @@ class TaskService():
         return [
             TaskRecord(
                 sequence_number=i,
-                action=task.get("description"), 
+                description=task.get("description"), 
                 additional_info=task.get("detail"),
                 status="pending",
                 is_active=True
@@ -65,7 +65,7 @@ class TaskService():
     def generate_command_calls(
         self, 
         task_description: str, 
-        task_detail: str,
+        task_additional_info: str,
         cmd_disc_list: List[str],
         action_history: str,
         knowledge: List[str]
@@ -84,7 +84,7 @@ class TaskService():
             List[CommandRecord]: コマンドのリスト
         """
         # コマンド一覧の生成
-        command_discription = "\n".join(f"        {idx}: {action}" for idx, action in enumerate(cmd_disc_list, 1))
+        command_description = "\n".join(f"        {idx}: {action}" for idx, action in enumerate(cmd_disc_list, 1))
         
         # 知識一覧の生成
         k = "\n".join([f'       ・{s}' for s in knowledge]) if knowledge else "       取得した情報はありません"
@@ -94,8 +94,8 @@ class TaskService():
             prompt_name="generate_commands_from_task",
             replacements={
                 "task_description": task_description,
-                "task_detail": task_detail,
-                "command_discription": command_discription,
+                "task_detail": task_additional_info,
+                "command_description": command_description,
                 "action_history": action_history,
                 "knowledge": k, 
                 "location_info": str(self._get_all_location_knowledge_names())
@@ -123,7 +123,7 @@ class TaskService():
         return [
             CommandRecord(
                 sequence_number=i,
-                action=d["name"],
+                description=d["name"],
                 additional_info="",
                 args=d["args"],
                 status="pending",
@@ -134,7 +134,7 @@ class TaskService():
 
     def regenerate_command_calls(self, task_description: str, task_detail: str, cmd_disc_list: List[str], action_history: str, knowledge: List[str]) -> dict:
         # コマンド一覧の生成
-        command_discription = "\n".join(f"        {idx}: {action}" for idx, action in enumerate(cmd_disc_list, 1))
+        command_description = "\n".join(f"        {idx}: {action}" for idx, action in enumerate(cmd_disc_list, 1))
         
         # 知識一覧の生成
         k = "\n".join([f'       ・{s}' for s in knowledge]) if knowledge else "       取得した情報はありません"
@@ -145,7 +145,7 @@ class TaskService():
             replacements={
                 "task_description": task_description,
                 "task_detail": task_detail,
-                "command_discription": command_discription,
+                "command_description": command_description,
                 "action_history": action_history,
                 "knowledge": k, 
                 "location_info": str(self._get_all_location_knowledge_names())

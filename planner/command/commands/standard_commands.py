@@ -8,8 +8,8 @@ class MoveCommand(Command):
     def __init__(self) -> None:
         super().__init__(
             name="move",
-            discription='ロボットについている台車を動かして<location>に移動するコマンド、ロボット自身が移動するだけで、何か物やオブジェクトを掴む機能は無い',
-            execute_args_discription={"location": "<location>"},
+            description='ロボットについている台車を動かして<location>に移動するコマンド、ロボット自身が移動するだけで、何か物やオブジェクトを掴む機能は無い',
+            execute_args_description={"location": "<location>"},
             execute_required_known_arguments=["location"],
         )
     
@@ -20,8 +20,10 @@ class MoveCommand(Command):
         time.sleep(1) # TODO: 後で消す
         if result:
             status = "failure"
+            message = f"{location}に移動できませんでした"
         else:
             status = "success"
+            message = f"{location}に移動しました"
 
         return CommandExecutionResult(
             status=status,
@@ -32,8 +34,8 @@ class FindCommand(Command):
     def __init__(self) -> None:
         super().__init__(
             name="find",
-            discription='ロボットのカメラを用いて見つける',
-            execute_args_discription={"object": "<object_name>"}
+            description='ロボットのカメラを用いて見つける',
+            execute_args_description={"object": "<object_name>"}
         )
         
     def execute(self, object) -> CommandExecutionResult:
@@ -58,8 +60,8 @@ class IntrofuceSelfCommand(Command):
     def __init__(self) -> None:
         super().__init__(
             name="introduce_self",
-            discription='自己紹介するコマンド',
-            execute_args_discription={"message": "<message>"}
+            description='自己紹介するコマンド',
+            execute_args_description={"message": "<message>"}
         )
         
     def execute(self, message) -> CommandExecutionResult:
@@ -71,8 +73,8 @@ class SpeakMessageCommand(Command):
     def __init__(self) -> None:
         super().__init__(
             name="speak_message",
-            discription='<content>について、ロボットのスピーカーを用いて発話する。 このコマンドは主にユーザーに対して発話、回答、応答、説明、伝達を行う為に用いる',
-            execute_args_discription={"speak_message": "<message>"}
+            description='<content>について、ロボットのスピーカーを用いて発話する。 このコマンドは主にユーザーに対して発話、回答、応答、説明、伝達を行う為に用いる',
+            execute_args_description={"speak_message": "<message>"}
         )
     
     def execute(self, speak_message) -> CommandExecutionResult:
@@ -85,8 +87,8 @@ class AskQuestionCommand(Command):
     def __init__(self) -> None:
         super().__init__(
             name="ask_question",
-            discription='<content>について、ロボットのスピーカーを用いてユーザー質問する。このコマンドを実行するには目の前に人が居る必要がある。',
-            execute_args_discription={"question": "<content>"}
+            description='<content>について、ロボットのスピーカーを用いてユーザー質問する。このコマンドを実行するには目の前に人が居る必要がある。',
+            execute_args_description={"question": "<content>"}
         )
     
     def execute(self, question) -> CommandExecutionResult:
@@ -99,8 +101,8 @@ class PickUpObjectCommand(Command):
     def __init__(self) -> None:
         super().__init__(
             name="pick_up_object",
-            discription='ロボットのカメラとロボットについているアームを使用して物やオブジェクトを掴む',
-            execute_args_discription={"object": "<object_name>"},
+            description='ロボットのカメラとロボットについているアームを使用して物やオブジェクトを掴む',
+            execute_args_description={"object": "<object_name>"},
             execute_required_known_arguments=["object"],
         )
         
@@ -114,8 +116,8 @@ class DropObjectCommand(Command):
     def __init__(self) -> None:
         super().__init__(
             name="drop_object",
-            discription='ロボットのカメラとロボットが持っているアームを使用して持っている物やオブジェクトを落とす',
-            execute_args_discription={"object": "<object_name>"},
+            description='ロボットのカメラとロボットが持っているアームを使用して持っている物やオブジェクトを落とす',
+            execute_args_description={"object": "<object_name>"},
             execute_required_known_arguments=["object"],
         )
         
@@ -129,8 +131,8 @@ class ErrorCommand(Command):
     def __init__(self) -> None:
         super().__init__(
             name="error",
-            discription='"エラーを報告するコマンド、適切な実行可能なコマンドが見つからない場合に使用する',
-            execute_args_discription={"message": "<message>"}
+            description='"エラーを報告するコマンド、適切な実行可能なコマンドが見つからない場合に使用する',
+            execute_args_description={"message": "<message>"}
         )
     
     def execute(self, message) -> CommandExecutionResult:

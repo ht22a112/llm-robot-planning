@@ -3,6 +3,7 @@ from typing import Union, Tuple, Dict
 from utils.utils import replace_placeholders
 from prompts.prompt_texts.system_prompt import *
 from prompts.prompt_texts.retrieval_doc import *
+from prompts.prompt_texts.result_evaluate import *
 
 def get_prompt(
     prompt_name: str,
@@ -25,6 +26,8 @@ def get_prompt(
         prompt = generate_commands_from_task_prompt
     elif prompt_name == "GENERATE_QUERY":
         prompt = GENERATE_QUERY_PROMPT
+    elif prompt_name == "EVALUATE_RESULT":
+        prompt = RESULT_EVALUATE_PROMPT
     else:
         raise ValueError(f"prompt_name {prompt_name} is not supported")
     

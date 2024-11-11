@@ -1,9 +1,10 @@
-from typing import Literal, Optional, List, Dict, Any
+from typing import Literal, Optional, List, Dict, Any, Union, overload
+import datetime
 import sqlite3
 import json
 
 from planner.database.data_type import Location, Position
-from planner.database.data_type import JobRecord, TaskRecord, CommandRecord, ExecutionResultRecord
+from planner.database.data_type import JobRecord, TaskRecord, CommandRecord, ExecutionResultRecord, CommandExecutionResultRecord
 from logger.logger import LLMRobotPlannerLogSystem
 log = LLMRobotPlannerLogSystem()
 
@@ -22,7 +23,7 @@ class SQLiteInterface():
         self._conn.close()
     
 
-class PlanHistory():
+class PlanningHistory():
     def __init__(self, sqlite_interface) -> None:
         self._sqlite_interface: SQLiteInterface = sqlite_interface
         self._cursor: sqlite3.Cursor = sqlite_interface._cursor
@@ -30,8 +31,6 @@ class PlanHistory():
         self.initialize_database()
                 
     def initialize_database(self):
-        # 外部キー制約を有効化
-        self._cursor.execute("PRAGMA foreign_keys = ON;")
         
         # TODO: あとで変更
         self._cursor.execute('''DROP TABLE IF EXISTS Jobs''')
@@ -41,6 +40,9 @@ class PlanHistory():
         self._cursor.execute('''DROP TABLE IF EXISTS TaskExecutionResults''')
         self._cursor.execute('''DROP TABLE IF EXISTS CommandExecutionResults''')
         self._cursor.execute('''DROP TABLE IF EXISTS ReplanningEvents''')
+        
+        # 外部キー制約を有効化
+        self._cursor.execute("PRAGMA foreign_keys = ON;")
     
         # Jobs テーブル
         self._cursor.execute('''
@@ -88,8 +90,7 @@ class PlanHistory():
         self._cursor.execute('''
             CREATE TABLE IF NOT EXISTS InstructionExecutionResults (
                 job_id INTEGER PRIMARY KEY,
-                result TEXT NOT NULL,
-                error_message TEXT,
+                status TEXT NOT NULL,
                 detailed_info TEXT,
                 start_time DATETIME,
                 end_time DATETIME,
@@ -102,8 +103,7 @@ class PlanHistory():
         self._cursor.execute('''
             CREATE TABLE IF NOT EXISTS TaskExecutionResults (
                 task_id INTEGER PRIMARY KEY,
-                result TEXT NOT NULL,
-                error_message TEXT,
+                status TEXT NOT NULL,
                 detailed_info TEXT,
                 start_time DATETIME,
                 end_time DATETIME,
@@ -116,9 +116,11 @@ class PlanHistory():
         self._cursor.execute('''
             CREATE TABLE IF NOT EXISTS CommandExecutionResults (
                 command_id INTEGER PRIMARY KEY,
-                result TEXT NOT NULL,
-                error_message TEXT,
+                status TEXT NOT NULL,
                 detailed_info TEXT,
+                x REAL,
+                y REAL,
+                z REAL,
                 start_time DATETIME,
                 end_time DATETIME,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -157,7 +159,7 @@ class PlanHistory():
             INSERT INTO Jobs (content, status, is_active, timestamp)
             VALUES (?, ?, ?, ?)
         ''', (
-            job.action,
+            job.description,
             job.status,
             job.is_active,
             job.timestamp.isoformat()
@@ -186,7 +188,7 @@ class PlanHistory():
             task.sequence_number,
             task.status,
             task.is_active,
-            task.action,
+            task.description,
             task.additional_info,
             task.timestamp.isoformat()
         ))
@@ -194,6 +196,15 @@ class PlanHistory():
         self._conn.commit()
         return task_id
 
+    def add_tasks(
+        self, 
+        tasks: List[TaskRecord], 
+        job_id: int
+    ):
+        
+        task_ids = [self.add_task(task, job_id) for task in tasks]
+        return task_ids
+    
     def add_command(
         self, 
         command: CommandRecord,
@@ -216,7 +227,7 @@ class PlanHistory():
         ''', (
             task_id,
             command.sequence_number,
-            command.action,
+            command.description,
             command.status,
             command.is_active,
             command.additional_info,
@@ -227,10 +238,33 @@ class PlanHistory():
         self._conn.commit()
         return command_id
 
+    def add_commands(
+        self,
+        commands: List[CommandRecord],
+        task_id: int
+        ):
+        command_ids = [self.add_command(command, task_id) for command in commands]
+        return command_ids
+    
+    @overload
     def add_execution_result(
         self, 
         execution_result: ExecutionResultRecord, 
-        entity_type: str, 
+        entity_type: Literal["instruction", "task"],
+        entity_id: int
+    ): ...
+    @overload
+    def add_execution_result(
+        self, 
+        execution_result: CommandExecutionResultRecord, 
+        entity_type: Literal["command"],
+        entity_id: int
+    ): ...
+    
+    def add_execution_result(
+        self, 
+        execution_result: ExecutionResultRecord, 
+        entity_type: Literal["instruction", "task", "command"],
         entity_id: int
     ):
         """
@@ -244,12 +278,11 @@ class PlanHistory():
         """
         if entity_type == 'instruction':
             self._cursor.execute('''
-                INSERT INTO InstructionExecutionResults (job_id, result, error_message, detailed_info, start_time, end_time, timestamp)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO InstructionExecutionResults (job_id, status, detailed_info, start_time, end_time, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?)
             ''', (
                 entity_id,
-                execution_result.result,
-                execution_result.error_message,
+                execution_result.status,
                 execution_result.detailed_info,
                 execution_result.start_time.isoformat() if execution_result.start_time else None,
                 execution_result.end_time.isoformat() if execution_result.end_time else None,
@@ -257,26 +290,27 @@ class PlanHistory():
             ))
         elif entity_type == 'task':
             self._cursor.execute('''
-                INSERT INTO TaskExecutionResults (task_id, result, error_message, detailed_info, start_time, end_time, timestamp)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO TaskExecutionResults (task_id, status, detailed_info, start_time, end_time, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?)
             ''', (
                 entity_id,
-                execution_result.result,
-                execution_result.error_message,
+                execution_result.status,
                 execution_result.detailed_info,
                 execution_result.start_time.isoformat() if execution_result.start_time else None,
                 execution_result.end_time.isoformat() if execution_result.end_time else None,
                 execution_result.timestamp.isoformat()
             ))
-        elif entity_type == 'command':
+        elif entity_type == 'command' and isinstance(execution_result, CommandExecutionResultRecord):
             self._cursor.execute('''
-                INSERT INTO CommandExecutionResults (command_id, result, error_message, detailed_info, start_time, end_time, timestamp)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO CommandExecutionResults (command_id, status, detailed_info, x, y, z, start_time, end_time, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 entity_id,
-                execution_result.result,
-                execution_result.error_message,
+                execution_result.status,
                 execution_result.detailed_info,
+                execution_result.x,
+                execution_result.y,
+                execution_result.z,
                 execution_result.start_time.isoformat() if execution_result.start_time else None,
                 execution_result.end_time.isoformat() if execution_result.end_time else None,
                 execution_result.timestamp.isoformat()
@@ -309,7 +343,26 @@ class PlanHistory():
         self._conn.commit()
         return replanning_event_id
     
-    
+    def get_all_command_execution_result(self) -> List[CommandExecutionResultRecord]:
+        self._cursor.execute('''
+            SELECT command_id, status, detailed_info, x, y, z, start_time, end_time, timestamp
+            FROM CommandExecutionResults
+        ''')
+        rows = self._cursor.fetchall()
+        return [
+            CommandExecutionResultRecord(
+                uid=row[0],
+                status=row[1],
+                detailed_info=row[2],
+                x=row[3],
+                y=row[4],
+                z=row[5],
+                start_time=row[6],
+                end_time=row[7],
+                timestamp=datetime.datetime.fromisoformat(row[8])
+            ) for row in rows
+        ]
+        
 class ActionHistory():
     def __init__(self, sqlite_interface: SQLiteInterface):
         self._sqlite_interface: SQLiteInterface = sqlite_interface

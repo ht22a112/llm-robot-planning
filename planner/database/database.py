@@ -1,25 +1,25 @@
 from typing import Optional, List, Literal, Dict, Any
-from planner.database.data_type import Location, JobRecord, TaskRecord
+from planner.database.data_type import Location, JobRecord, TaskRecord, CommandRecord, CommandExecutionResultRecord, ExecutionResultRecord 
 
 from logger.logger import LLMRobotPlannerLogSystem
 log = LLMRobotPlannerLogSystem()
 
 class MemoryDatabase():
     def __init__(self):
-        self.records = {}
         self.current_job: Optional[JobRecord] = None
 
 from planner.database.sqlite import SQLiteInterface
-from planner.database.sqlite import LocationKnowledge, ObjectKnowledge, ActionHistory
+from planner.database.sqlite import LocationKnowledge, ObjectKnowledge, ActionHistory, PlanningHistory
 from planner.database.chroma import ChromaDBWithGemini
 
 class DatabaseManager():
     def __init__(self):
         db_path = "planner/database/db/test.db"
-        self._memory_db = MemoryDatabase()
+        #self._memory_db = MemoryDatabase()
         self._sqlite_interface = SQLiteInterface(db_path)
         
         #
+        self._planning_history = PlanningHistory(self._sqlite_interface)
         self._action_history = ActionHistory(self._sqlite_interface)
         self._location_knowledge = LocationKnowledge(self._sqlite_interface)
         #self.obj_db = ObjectKnowledge(self._sqlite_interface)
@@ -33,40 +33,61 @@ class DatabaseManager():
         )
         
                 
-    def start_new_job(self, instruction: str, tasks: List[TaskRecord]):
+    def add_job(self, job: JobRecord) -> JobRecord:
         """
         Args:
             instruction: str ユーザーからの指示（最初にロボットに与える命令）
         Returns:
-            None
+            job_id: int ジョブID
         """
-        self._memory_db.current_job = JobRecord(
-            content=instruction,
-            details="",
-            tasks=tasks
-        )
-        
-    def get_current_job(self) -> Optional[JobRecord]:
-        return self._memory_db.current_job
+        job_id = self._planning_history.add_job(job)
+        job.uid = job_id
+        return job
     
-    def log_robot_action(
+    def add_tasks_to_job(self, tasks: List[TaskRecord], job_id: int) -> List[TaskRecord]:
+        """
+        データーベースにタスクを追加する
+        job_idに対応するジョブにタスクを追加し、
+        データベースから生成されたUIDを各TaskRecordに割り当てます。
+        
+        Args:
+            tasks: List[TaskRecord]
+            job_id: int
+        Returns:
+            tasks: List[TaskRecord] uidが付与されたタスクのリスト
+        """
+        task_ids = self._planning_history.add_tasks(tasks, job_id)  
+        for task, task_id in zip(tasks, task_ids):
+            task.uid = task_id
+        return tasks
+    
+    def add_commands_to_task(self, commands: List[CommandRecord], task_id: int) -> List[CommandRecord]:
+        """
+        データーベースにコマンドを追加する
+        task_idに対応するタスクにコマンドを追加し、
+        データベースから生成されたUIDを各CommandRecordに割り当てます。
+        
+        Args:
+            commands: List[CommandRecord]
+            task_id: int
+        Returns:
+            commands: List[CommandRecord] uidが付与されたコマンドのリスト
+        """
+        command_ids = self._planning_history.add_commands(commands, task_id)  
+        for cmd, cmd_id in zip(commands, command_ids):
+            cmd.uid = cmd_id
+        return commands
+    
+    def add_command_execution_result(
         self,
-        action: str,
-        status: Literal["success", "failure"],
-        details: Optional[str],
-        x: Optional[float],
-        y: Optional[float],
-        z: Optional[float],
-        timestamp: Optional[float] = None
+        command_execution_result_record: CommandExecutionResultRecord,
+        command_id: int
     ):
-        self._action_history.log_robot_action(
-            action=action,
-            status=status,
-            details=details,
-            x=x,
-            y=y,
-            z=z,
-            timestamp=timestamp
+        # TODO: uidの割り当て処理の追加
+        self._planning_history.add_execution_result(
+            command_execution_result_record,
+            "command",
+            command_id
         )
     
     def add_location_knowledge(
@@ -87,8 +108,8 @@ class DatabaseManager():
             z=z
         )
         
-    def get_all_actions(self) -> List[Dict[str, Any]]:
-        return self._action_history.get_all()
+    def get_all_actions(self) -> List[CommandRecord]:
+        return self._planning_history.get_all_command_execution_result()
 
     def get_all_known_locations(self) -> List[Location]:
         return self._location_knowledge.get_all()

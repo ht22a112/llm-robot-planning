@@ -28,6 +28,8 @@ def get_prompt(
         prompt = GENERATE_QUERY_PROMPT
     elif prompt_name == "EVALUATE_RESULT":
         prompt = RESULT_EVALUATE_PROMPT
+    elif prompt_name == "REGENERATE_COMMANDS_FROM_TASK":
+        prompt = regenerate_commands_from_task_prompt
     else:
         raise ValueError(f"prompt_name {prompt_name} is not supported")
     

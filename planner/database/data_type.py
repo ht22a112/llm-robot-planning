@@ -62,7 +62,7 @@ class _TimeRecord(_DataRecordBase):
 @dataclass
 class _ContentRecord(_DataRecordBase):
     description: str
-    additional_info: Optional[str] = None  # optionalに変更
+    additional_info: str = ""
 
 @dataclass
 class _SequenceRecord(_DataRecordBase):

@@ -35,10 +35,10 @@ class Location():
     timestamp: float
     
 
+# --- ベースクラスの定義 ---
 
-# Records
 @dataclass
-class _DataRecordBase():
+class _DataRecordBase:
     def __json__(self) -> dict:
         return self.to_dict()
     
@@ -46,30 +46,32 @@ class _DataRecordBase():
         """データクラスを辞書に変換する(asdict()のラッパー)"""
         return asdict(self)
     
-    def to_json_str(self, **kwarg) -> str:
+    def to_json_str(self, **kwargs) -> str:
         """データクラスをJSON文字列に変換する"""
-        return to_json_str(self, **kwarg)
+        return to_json_str(self, **kwargs)
 
-@dataclass  
+@dataclass
 class _TimeRecord(_DataRecordBase):
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-
+    
     def __json__(self) -> dict:
         d = super().__json__()
         d["timestamp"] = self.timestamp.isoformat()
         return d
-    
+
 @dataclass
 class _ContentRecord(_DataRecordBase):
     description: str
-    additional_info: str
-    
+    additional_info: Optional[str] = None  # optionalに変更
+
 @dataclass
 class _SequenceRecord(_DataRecordBase):
     sequence_number: int
 
+# --- 実行結果のデータクラス ---
+
 @dataclass
-class ExecutionResultRecord(_TimeRecord, _DataRecordBase):
+class ExecutionResultRecord(_TimeRecord):
     uid: Optional[int] = None
     status: Union[Literal["success"], Literal["failure"]] = "success"
     detailed_info: Optional[str] = None
@@ -87,32 +89,49 @@ class CommandExecutionResultRecord(ExecutionResultRecord):
     x: Optional[float] = None
     y: Optional[float] = None
     z: Optional[float] = None
-       
+
+# --- コマンド、タスク、ジョブのデータクラス ---
+
 @dataclass
 class CommandRecord(_TimeRecord, _ContentRecord, _SequenceRecord):
     uid: Optional[int] = None  # DBからの自動生成ID
-    status: Union[Literal["pending"], Literal["success"], Literal["failure"]] = "pending"
-    is_active: bool = True
+    status: Union[
+        Literal["pending"], 
+        Literal["in_progress"], 
+        Literal["success"], 
+        Literal["failure"], 
+        Literal["canceled"]
+    ] = "pending"
     execution_result: Optional[CommandExecutionResultRecord] = None
     args: Dict[str, str] = field(default_factory=dict)
     
 @dataclass
 class TaskRecord(_TimeRecord, _ContentRecord, _SequenceRecord):
     uid: Optional[int] = None  # DBからの自動生成ID
-    status: Union[Literal["pending"], Literal["success"], Literal["failure"]] = "pending"
-    is_active: bool = True
+    status: Union[
+        Literal["pending"], 
+        Literal["in_progress"], 
+        Literal["success"], 
+        Literal["failure"], 
+        Literal["canceled"]
+    ] = "pending"
     execution_result: Optional[ExecutionResultRecord] = None  # Taskの実行結果
     commands: List[CommandRecord] = field(default_factory=list)
-    
+
 @dataclass
 class JobRecord(_TimeRecord, _ContentRecord):
     uid: Optional[int] = None  # DBからの自動生成ID
-    status: Union[Literal["pending"], Literal["success"], Literal["failure"]] = "pending"
-    is_active: bool = True
-    execution_result: Optional[ExecutionResultRecord] = None  # Instructionの実行結果
+    status: Union[
+        Literal["pending"], 
+        Literal["in_progress"], 
+        Literal["success"], 
+        Literal["failure"], 
+        Literal["canceled"]
+    ] = "pending"
+    execution_result: Optional[ExecutionResultRecord] = None  # Jobの実行結果
     tasks: List[TaskRecord] = field(default_factory=list)
-
-
+    
+    
 __all__ = [
     "Position",
     "Object",

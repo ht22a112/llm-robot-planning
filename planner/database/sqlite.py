@@ -1,5 +1,5 @@
 from typing import Literal, Optional, List, Dict, Any, Union, overload
-import datetime
+from datetime import datetime
 import sqlite3
 import json
 
@@ -26,16 +26,19 @@ class SQLiteInterface():
         self._conn.close()
     
 
-class PlanningHistory():
+class PlanningHistory:
     def __init__(self, sqlite_interface) -> None:
-        self._sqlite_interface: SQLiteInterface = sqlite_interface
+        self._sqlite_interface = sqlite_interface
         self._cursor: sqlite3.Cursor = sqlite_interface._cursor
         self._conn: sqlite3.Connection = sqlite_interface._conn
         self.initialize_database()
-                
+
     def initialize_database(self):
-        
-        # TODO: あとで変更
+        """
+        データベースを初期化し、必要なテーブルを作成します。
+        注意: 本番環境では DROP TABLE を実行しないようにしてください。
+        """
+        # 開発中のみに使用
         self._cursor.execute('''DROP TABLE IF EXISTS Jobs''')
         self._cursor.execute('''DROP TABLE IF EXISTS Tasks''')
         self._cursor.execute('''DROP TABLE IF EXISTS Commands''')
@@ -43,21 +46,20 @@ class PlanningHistory():
         self._cursor.execute('''DROP TABLE IF EXISTS TaskExecutionResults''')
         self._cursor.execute('''DROP TABLE IF EXISTS CommandExecutionResults''')
         self._cursor.execute('''DROP TABLE IF EXISTS ReplanningEvents''')
-        
+
         # 外部キー制約を有効化
         self._cursor.execute("PRAGMA foreign_keys = ON;")
-    
+
         # Jobs テーブル
         self._cursor.execute('''
             CREATE TABLE IF NOT EXISTS Jobs (
                 job_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 content TEXT NOT NULL,
                 status TEXT NOT NULL DEFAULT 'pending',
-                is_active BOOLEAN NOT NULL DEFAULT 1,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         ''')
-        
+
         # Tasks テーブル
         self._cursor.execute('''
             CREATE TABLE IF NOT EXISTS Tasks (
@@ -65,14 +67,13 @@ class PlanningHistory():
                 job_id INTEGER NOT NULL,
                 sequence_number INTEGER NOT NULL,
                 status TEXT NOT NULL DEFAULT 'pending',
-                is_active BOOLEAN NOT NULL DEFAULT 1,
                 task_name TEXT NOT NULL,
                 task_details TEXT,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (job_id) REFERENCES Jobs(job_id)
             )
         ''')
-        
+
         # Commands テーブル
         self._cursor.execute('''
             CREATE TABLE IF NOT EXISTS Commands (
@@ -81,15 +82,14 @@ class PlanningHistory():
                 sequence_number INTEGER NOT NULL,
                 action TEXT NOT NULL,
                 status TEXT NOT NULL DEFAULT 'pending',
-                is_active BOOLEAN NOT NULL DEFAULT 1,
                 command_description TEXT,
                 command_args TEXT,  -- JSON形式で引数を保持
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (task_id) REFERENCES Tasks(task_id)
             )
         ''')
-        
-        # ExecutionResults テーブル（Instruction用）
+
+        # ExecutionResults テーブル（Job用）
         self._cursor.execute('''
             CREATE TABLE IF NOT EXISTS InstructionExecutionResults (
                 job_id INTEGER PRIMARY KEY,
@@ -101,7 +101,7 @@ class PlanningHistory():
                 FOREIGN KEY (job_id) REFERENCES Jobs(job_id)
             )
         ''')
-        
+
         # ExecutionResults テーブル（Task用）
         self._cursor.execute('''
             CREATE TABLE IF NOT EXISTS TaskExecutionResults (
@@ -114,7 +114,7 @@ class PlanningHistory():
                 FOREIGN KEY (task_id) REFERENCES Tasks(task_id)
             )
         ''')
-        
+
         # ExecutionResults テーブル（Command用）
         self._cursor.execute('''
             CREATE TABLE IF NOT EXISTS CommandExecutionResults (
@@ -130,7 +130,7 @@ class PlanningHistory():
                 FOREIGN KEY (command_id) REFERENCES Commands(command_id)
             )
         ''')
-        
+
         # ReplanningEvents テーブル
         self._cursor.execute('''
             CREATE TABLE IF NOT EXISTS ReplanningEvents (
@@ -146,68 +146,77 @@ class PlanningHistory():
             )
         ''')
         self._conn.commit()
+        logger.info("データベースの初期化が完了しました。")
 
     def add_job(self, job: JobRecord) -> int:
         """
         Jobを追加する
-        
+
         Args:
             job: JobRecord ジョブ情報
-            
+
         Returns:
             int: 追加したJobのUID
         """
-        
         self._cursor.execute('''
-            INSERT INTO Jobs (content, status, is_active, timestamp)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO Jobs (content, status, timestamp)
+            VALUES (?, ?, ?)
         ''', (
             job.description,
             job.status,
-            job.is_active,
             job.timestamp.isoformat()
         ))
         job_id = self._cursor.lastrowid
         self._conn.commit()
+        logger.info(f"Job {job_id} を追加しました。")
         return job_id
 
     def add_task(self, task: TaskRecord, job_id: int) -> int:
         """
         Taskを追加する
-        
+
         Args:
             task: TaskRecord タスク情報
             job_id: int タスクが属するジョブのUID
-        
+
         Returns:
-            task_id: int 追加したTaskのUID
+            int: 追加したTaskのUID
         """
-        
         self._cursor.execute('''
-            INSERT INTO Tasks (job_id, sequence_number, status, is_active, task_name, task_details, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO Tasks (job_id, sequence_number, status, task_name, task_details, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?)
         ''', (
             job_id,
             task.sequence_number,
             task.status,
-            task.is_active,
             task.description,
             task.additional_info,
             task.timestamp.isoformat()
         ))
         task_id = self._cursor.lastrowid
         self._conn.commit()
+        logger.info(f"Task {task_id} を追加しました。")
         return task_id
 
     def add_tasks(
         self, 
         tasks: List[TaskRecord], 
         job_id: int
-    ):
-        
+    ) -> List[int]:
+        """
+        複数のTaskを追加する
+
+        Args:
+            tasks: List[TaskRecord] タスク情報のリスト
+            job_id: int タスクが属するジョブのUID
+
+        Returns:
+            List[int]: 追加したTaskのUIDのリスト
+        """
         task_ids = [self.add_task(task, job_id) for task in tasks]
+        logger.info(f"{len(task_ids)} 件のTaskを追加しました。")
         return task_ids
-    
+
     def add_command(
         self, 
         command: CommandRecord,
@@ -215,68 +224,66 @@ class PlanningHistory():
     ) -> int:
         """
         コマンドを追加する
-        
+
         Args:
             command: CommandRecord コマンド情報
             task_id: int コマンドが属するタスクのUID
-        
+
         Returns:
-            command_id: int 追加したCommandのUID
+            int: 追加したCommandのUID
         """
         command_args_json = json.dumps(command.args) if command.args else None
         self._cursor.execute('''
-            INSERT INTO Commands (task_id, sequence_number, action, status, is_active, command_description, command_args, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO Commands (task_id, sequence_number, action, status, command_description, command_args, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         ''', (
             task_id,
             command.sequence_number,
-            command.description,
+            command.action,
             command.status,
-            command.is_active,
             command.additional_info,
             command_args_json,
             command.timestamp.isoformat()
         ))
         command_id = self._cursor.lastrowid
         self._conn.commit()
+        logger.info(f"Command {command_id} を追加しました。")
         return command_id
 
     def add_commands(
         self,
         commands: List[CommandRecord],
         task_id: int
-        ):
+    ) -> List[int]:
+        """
+        複数のコマンドを追加する
+
+        Args:
+            commands: List[CommandRecord] コマンド情報のリスト
+            task_id: int コマンドが属するタスクのUID
+
+        Returns:
+            List[int]: 追加したCommandのUIDのリスト
+        """
         command_ids = [self.add_command(command, task_id) for command in commands]
+        logger.info(f"{len(command_ids)} 件のCommandを追加しました。")
         return command_ids
-    
-    @overload
+
     def add_execution_result(
         self, 
-        execution_result: ExecutionResultRecord, 
-        entity_type: Literal["instruction", "task"],
-        entity_id: int
-    ): ...
-    @overload
-    def add_execution_result(
-        self, 
-        execution_result: CommandExecutionResultRecord, 
-        entity_type: Literal["command"],
-        entity_id: int
-    ): ...
-    
-    def add_execution_result(
-        self, 
-        execution_result: ExecutionResultRecord, 
+        execution_result: Union[ExecutionResultRecord, CommandExecutionResultRecord], 
         entity_type: Literal["instruction", "task", "command"],
         entity_id: int
     ):
         """
+        実行結果を追加する
+
         Args:
-            execution_result: ExecutionResultRecord 実行結果
+            execution_result: ExecutionResultRecord または CommandExecutionResultRecord 実行結果
             entity_type: 'instruction', 'task', 'command'
             entity_id: 対応するID
-        
-        Return:
+
+        Returns:
             None
         """
         if entity_type == 'instruction':
@@ -291,6 +298,7 @@ class PlanningHistory():
                 execution_result.end_time.isoformat() if execution_result.end_time else None,
                 execution_result.timestamp.isoformat()
             ))
+            logger.info(f"InstructionExecutionResult を Job {entity_id} に追加しました。")
         elif entity_type == 'task':
             self._cursor.execute('''
                 INSERT INTO TaskExecutionResults (task_id, status, detailed_info, start_time, end_time, timestamp)
@@ -303,6 +311,7 @@ class PlanningHistory():
                 execution_result.end_time.isoformat() if execution_result.end_time else None,
                 execution_result.timestamp.isoformat()
             ))
+            logger.info(f"TaskExecutionResult を Task {entity_id} に追加しました。")
         elif entity_type == 'command' and isinstance(execution_result, CommandExecutionResultRecord):
             self._cursor.execute('''
                 INSERT INTO CommandExecutionResults (command_id, status, detailed_info, x, y, z, start_time, end_time, timestamp)
@@ -318,20 +327,26 @@ class PlanningHistory():
                 execution_result.end_time.isoformat() if execution_result.end_time else None,
                 execution_result.timestamp.isoformat()
             ))
+            logger.info(f"CommandExecutionResult を Command {entity_id} に追加しました。")
         else:
-            raise ValueError("Invalid entity_type. Must be 'instruction', 'task', or 'command'.")
+            raise ValueError("Invalid entity_type or execution_result type.")
         
         self._conn.commit()
-        
 
     def add_replanning_event(self, replanning_event: dict) -> int:
         """
-        replanning_event: {
-            'job_id': int,
-            'trigger_task_id': Optional[int],
-            'trigger_command_id': Optional[int],
-            'reason': str
-        }
+        ReplanningEvent を追加する
+
+        Args:
+            replanning_event: {
+                'job_id': int,
+                'trigger_task_id': Optional[int],
+                'trigger_command_id': Optional[int],
+                'reason': str
+            }
+
+        Returns:
+            int: 追加したReplanningEventのID
         """
         self._cursor.execute('''
             INSERT INTO ReplanningEvents (job_id, trigger_task_id, trigger_command_id, reason)
@@ -344,28 +359,36 @@ class PlanningHistory():
         ))
         replanning_event_id = self._cursor.lastrowid
         self._conn.commit()
+        logger.info(f"ReplanningEvent {replanning_event_id} を追加しました。")
         return replanning_event_id
-    
+
     def get_all_command_execution_result(self) -> List[CommandExecutionResultRecord]:
+        """
+        全てのCommandExecutionResultsを取得する
+
+        Returns:
+            List[CommandExecutionResultRecord]: 全てのコマンド実行結果のリスト
+        """
         self._cursor.execute('''
             SELECT command_id, status, detailed_info, x, y, z, start_time, end_time, timestamp
             FROM CommandExecutionResults
         ''')
         rows = self._cursor.fetchall()
-        return [
+        results = [
             CommandExecutionResultRecord(
-                uid=row[0],
                 status=row[1],
                 detailed_info=row[2],
                 x=row[3],
                 y=row[4],
                 z=row[5],
-                start_time=row[6],
-                end_time=row[7],
-                timestamp=datetime.datetime.fromisoformat(row[8])
+                start_time=datetime.fromisoformat(row[6]) if row[6] else None,
+                end_time=datetime.fromisoformat(row[7]) if row[7] else None,
+                timestamp=datetime.fromisoformat(row[8])
             ) for row in rows
         ]
-    
+        logger.info(f"{len(results)} 件のCommandExecutionResultを取得しました。")
+        return results
+
     def get_all_commands(self) -> List[CommandRecord]:
         """
         Commands テーブルと CommandExecutionResults テーブルを結合して、
@@ -381,7 +404,6 @@ class PlanningHistory():
                 c.sequence_number, 
                 c.action, 
                 c.status, 
-                c.is_active, 
                 c.command_description, 
                 c.command_args, 
                 c.timestamp,
@@ -402,8 +424,7 @@ class PlanningHistory():
         commands = []
         for row in rows:
             (
-                command_id, task_id, sequence_number, action, status, is_active, 
-                command_description, command_args, timestamp_str,
+                command_id, task_id, sequence_number, action, status, command_description, command_args, timestamp_str,
                 exec_status, exec_detailed_info, exec_x, exec_y, exec_z, 
                 exec_start_time_str, exec_end_time_str, exec_timestamp_str
             ) = row
@@ -417,7 +438,7 @@ class PlanningHistory():
 
             # タイムスタンプを datetime オブジェクトに変換
             try:
-                timestamp = datetime.datetime.fromisoformat(timestamp_str) if timestamp_str else None
+                timestamp = datetime.fromisoformat(timestamp_str) if timestamp_str else None
             except ValueError as e:
                 logger.error(f"command_id {command_id} の timestamp の解析に失敗しました: {e}")
                 timestamp = None
@@ -426,25 +447,24 @@ class PlanningHistory():
             execution_result: Optional[CommandExecutionResultRecord] = None
             if exec_status:
                 try:
-                    exec_start_time = datetime.datetime.fromisoformat(exec_start_time_str) if exec_start_time_str else None
+                    exec_start_time = datetime.fromisoformat(exec_start_time_str) if exec_start_time_str else None
                 except ValueError as e:
                     logger.error(f"command_id {command_id} の exec_start_time の解析に失敗しました: {e}")
                     exec_start_time = None
 
                 try:
-                    exec_end_time = datetime.datetime.fromisoformat(exec_end_time_str) if exec_end_time_str else None
+                    exec_end_time = datetime.fromisoformat(exec_end_time_str) if exec_end_time_str else None
                 except ValueError as e:
                     logger.error(f"command_id {command_id} の exec_end_time の解析に失敗しました: {e}")
                     exec_end_time = None
 
                 try:
-                    exec_timestamp = datetime.datetime.fromisoformat(exec_timestamp_str) if exec_timestamp_str else None
+                    exec_timestamp = datetime.fromisoformat(exec_timestamp_str) if exec_timestamp_str else None
                 except ValueError as e:
                     logger.error(f"command_id {command_id} の exec_timestamp の解析に失敗しました: {e}")
                     exec_timestamp = None
 
                 execution_result = CommandExecutionResultRecord(
-                    uid=command_id,  # command_id を uid として使用
                     status=exec_status,
                     detailed_info=exec_detailed_info,
                     x=exec_x,
@@ -460,7 +480,6 @@ class PlanningHistory():
                 status=status,
                 description=action,
                 sequence_number=sequence_number,
-                is_active=bool(is_active),
                 additional_info=command_description,
                 args=args,
                 timestamp=timestamp,
@@ -472,8 +491,149 @@ class PlanningHistory():
         logger.info(f"データベースから {len(commands)} 件のコマンドを取得しました。")
         return commands
 
-# Knowledge
+    # --- 実行履歴の取得関数 ---
 
+    def get_executed_tasks(self, job_id: int) -> List[TaskRecord]:
+        """
+        指定されたJobに関連する実行済みのタスクを取得する
+
+        Args:
+            job_id: int ジョブのUID
+
+        Returns:
+            List[TaskRecord]: 実行済みのタスクのリスト
+        """
+        self._cursor.execute('''
+            SELECT task_id, sequence_number, status, task_name, task_details, timestamp
+            FROM Tasks
+            WHERE job_id = ? AND status IN ('success', 'failure', 'canceled')
+            ORDER BY sequence_number
+        ''', (job_id,))
+        rows = self._cursor.fetchall()
+
+        tasks = []
+        for row in rows:
+            task_id, seq_num, status, name, details, ts = row
+            # TaskExecutionResults から詳細情報を取得
+            self._cursor.execute('''
+                SELECT status, detailed_info, start_time, end_time, timestamp
+                FROM TaskExecutionResults
+                WHERE task_id = ?
+            ''', (task_id,))
+            exec_row = self._cursor.fetchone()
+            if exec_row:
+                exec_status, exec_detailed_info, exec_start_time_str, exec_end_time_str, exec_timestamp_str = exec_row
+                try:
+                    exec_start_time = datetime.fromisoformat(exec_start_time_str) if exec_start_time_str else None
+                    exec_end_time = datetime.fromisoformat(exec_end_time_str) if exec_end_time_str else None
+                    exec_timestamp = datetime.fromisoformat(exec_timestamp_str) if exec_timestamp_str else None
+                except ValueError as e:
+                    logger.error(f"Task {task_id} のExecutionResult のタイムスタンプ解析に失敗しました: {e}")
+                    exec_start_time = exec_end_time = exec_timestamp = None
+
+                execution_result = ExecutionResultRecord(
+                    status=exec_status,
+                    detailed_info=exec_detailed_info,
+                    start_time=exec_start_time,
+                    end_time=exec_end_time,
+                    timestamp=exec_timestamp
+                )
+            else:
+                execution_result = None
+
+            task = TaskRecord(
+                uid=task_id,
+                status=status,
+                description=name,
+                sequence_number=seq_num,
+                additional_info=details,
+                timestamp=datetime.fromisoformat(ts) if ts else None,
+                execution_result=execution_result
+            )
+            tasks.append(task)
+        logger.info(f"Job {job_id} から {len(tasks)} 件の実行済みTaskを取得しました。")
+        return tasks
+
+    def get_executed_commands(self, task_id: int) -> List[CommandRecord]:
+        """
+        指定されたTaskに関連する実行済みのコマンドを取得する
+
+        Args:
+            task_id: int タスクのUID
+
+        Returns:
+            List[CommandRecord]: 実行済みのコマンドのリスト
+        """
+        self._cursor.execute('''
+            SELECT command_id, sequence_number, action, status, command_description, command_args, timestamp
+            FROM Commands
+            WHERE task_id = ? AND status IN ('success', 'failure', 'canceled')
+            ORDER BY sequence_number
+        ''', (task_id,))
+        rows = self._cursor.fetchall()
+
+        commands = []
+        for row in rows:
+            command_id, seq_num, action, status, description, args_json, ts = row
+            try:
+                args = json.loads(args_json) if args_json else {}
+            except json.JSONDecodeError as e:
+                logger.error(f"Command {command_id} の args デコードに失敗しました: {e}")
+                args = {}
+
+            try:
+                timestamp = datetime.fromisoformat(ts) if ts else None
+            except ValueError as e:
+                logger.error(f"Command {command_id} の timestamp 解析に失敗しました: {e}")
+                timestamp = None
+
+            # CommandExecutionResults から詳細情報を取得
+            self._cursor.execute('''
+                SELECT status, detailed_info, x, y, z, start_time, end_time, timestamp
+                FROM CommandExecutionResults
+                WHERE command_id = ?
+            ''', (command_id,))
+            exec_row = self._cursor.fetchone()
+            if exec_row:
+                exec_status, exec_detailed_info, exec_x, exec_y, exec_z, exec_start_time_str, exec_end_time_str, exec_timestamp_str = exec_row
+                try:
+                    exec_start_time = datetime.fromisoformat(exec_start_time_str) if exec_start_time_str else None
+                    exec_end_time = datetime.fromisoformat(exec_end_time_str) if exec_end_time_str else None
+                    exec_timestamp = datetime.fromisoformat(exec_timestamp_str) if exec_timestamp_str else None
+                except ValueError as e:
+                    logger.error(f"Command {command_id} のExecutionResult のタイムスタンプ解析に失敗しました: {e}")
+                    exec_start_time = exec_end_time = exec_timestamp = None
+
+                execution_result = CommandExecutionResultRecord(
+                    status=exec_status,
+                    detailed_info=exec_detailed_info,
+                    x=exec_x,
+                    y=exec_y,
+                    z=exec_z,
+                    start_time=exec_start_time,
+                    end_time=exec_end_time,
+                    timestamp=exec_timestamp
+                )
+            else:
+                execution_result = None
+
+            command = CommandRecord(
+                uid=command_id,
+                status=status,
+                description=action,
+                sequence_number=seq_num,
+                additional_info=description,
+                args=args,
+                timestamp=timestamp,
+                execution_result=execution_result
+            )
+            commands.append(command)
+        logger.info(f"Task {task_id} から {len(commands)} 件の実行済みCommandを取得しました。")
+        return commands
+
+
+
+# Knowledge
 class Knowledge():
     pass
 

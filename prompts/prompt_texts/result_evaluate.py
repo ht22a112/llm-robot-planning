@@ -8,9 +8,10 @@ RESULT_EVALUATE_PROMPT = \
 {{command_execution_result}}
 
 考えられる実行の失敗の原因をいくつか考えて以下のフォーマットを厳守してjson形式で出力してください
-error_levelはcommand_levelとtask_levelの２つがあります。
-command_level: コマンドの組み合わせの問題、もしくはコマンドに与える引数の問題で、コマンドの組み合わせの再生成で実行の失敗に対処できる
-task_level: 指示をタスクにステップごとに分解するときの問題、タスクの再生成で失敗を解決できる
+- 可能性が高いと考えられる原因から順に記述してください
+- error_levelはcommand_levelとtask_levelの２つがあります。
+    command_level: コマンドの組み合わせの問題、もしくはコマンドに与える引数の問題で、コマンドの組み合わせの再生成で実行の失敗に対処できる
+    task_level: 指示をタスクにステップごとに分解するときの問題、タスクの再生成で失敗を解決できる
 
 Json format example:
 {

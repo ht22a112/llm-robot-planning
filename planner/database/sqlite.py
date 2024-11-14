@@ -8,6 +8,9 @@ from planner.database.data_type import JobRecord, TaskRecord, CommandRecord, Exe
 from logger.logger import LLMRobotPlannerLogSystem
 log = LLMRobotPlannerLogSystem()
 
+import logging
+logger = logging.getLogger("SQLite")
+
 class SQLiteInterface():
     def __init__(self, db_path: str):
         self._conn: sqlite3.Connection
@@ -362,95 +365,112 @@ class PlanningHistory():
                 timestamp=datetime.datetime.fromisoformat(row[8])
             ) for row in rows
         ]
-        
-class ActionHistory():
-    def __init__(self, sqlite_interface: SQLiteInterface):
-        self._sqlite_interface: SQLiteInterface = sqlite_interface
-        self._cursor: sqlite3.Cursor = sqlite_interface._cursor
-        self._conn: sqlite3.Connection = sqlite_interface._conn
-        self._create_robot_action_history_table()
-        
-    def _create_robot_action_history_table(self):
-        # TODO: 後で過去のデーターベースの削除や保存方法の変更
-        self._cursor.execute('''DROP TABLE IF EXISTS actions''')
+    
+    def get_all_commands(self) -> List[CommandRecord]:
+        """
+        Commands テーブルと CommandExecutionResults テーブルを結合して、
+        すべてのコマンドとその実行結果を取得し、CommandRecord インスタンスのリストとして返します。
+
+        Returns:
+            List[CommandRecord]: データベース内のすべてのコマンドとその実行結果のリスト。
+        """
         self._cursor.execute('''
-        CREATE TABLE IF NOT EXISTS actions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            action TEXT NOT NULL,
-            status TEXT NOT NULL,
-            details TEXT,
-            x REAL,
-            y REAL,
-            z REAL,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
+            SELECT 
+                c.command_id, 
+                c.task_id, 
+                c.sequence_number, 
+                c.action, 
+                c.status, 
+                c.is_active, 
+                c.command_description, 
+                c.command_args, 
+                c.timestamp,
+                cer.status AS exec_status,
+                cer.detailed_info AS exec_detailed_info,
+                cer.x AS exec_x,
+                cer.y AS exec_y,
+                cer.z AS exec_z,
+                cer.start_time AS exec_start_time,
+                cer.end_time AS exec_end_time,
+                cer.timestamp AS exec_timestamp
+            FROM Commands c
+            LEFT JOIN CommandExecutionResults cer ON c.command_id = cer.command_id
+            ORDER BY c.command_id ASC
         ''')
-        
-    def log_robot_action(self,
-        action: str,
-        status: Literal["success", "failure"],
-        details: Optional[str],
-        x: Optional[float],
-        y: Optional[float],
-        z: Optional[float],
-        timestamp: Optional[float] = None,    
-    ):      
-        """
-        ロボットの行動を記録
+        rows = self._cursor.fetchall()
 
-        args:
-            action: str ロボットの行動
-            status: str 行動のステータス
-            details: str 行動の詳細
-            x: float x座標
-            y: float y座標
-            z: float z座標
-            timestamp: float タイムスタンプ        
-        """
+        commands = []
+        for row in rows:
+            (
+                command_id, task_id, sequence_number, action, status, is_active, 
+                command_description, command_args, timestamp_str,
+                exec_status, exec_detailed_info, exec_x, exec_y, exec_z, 
+                exec_start_time_str, exec_end_time_str, exec_timestamp_str
+            ) = row
 
-        self._cursor.execute(f'''
-        INSERT INTO actions (action, status, details, x, y, z, timestamp)
-        VALUES (?, ?, ?, ?, ?, ?, {timestamp if timestamp is not None else 'CURRENT_TIMESTAMP'})
-        ''', (
-            action,
-            status,
-            details,
-            x,
-            y,
-            z
-        ))
-        self._conn.commit()
+            # JSON 形式の command_args を解析
+            try:
+                args = json.loads(command_args) if command_args else {}
+            except json.JSONDecodeError as e:
+                logger.error(f"command_id {command_id} の command_args のデコードに失敗しました: {e}")
+                args = {}
 
-    def get_all(self) -> List[Dict[str, Any]]:
-        """すべての行動履歴を取得する。"""
-        with log.span(name="ロボットの行動履歴を取得") as span:
-            span.input("get_all_action_history") 
-            self._cursor.execute('''
-            SELECT id, action, status, details, x, y, z, timestamp
-            FROM actions
-            ORDER BY timestamp ASC
-            ''')
-            rows = self._cursor.fetchall()
+            # タイムスタンプを datetime オブジェクトに変換
+            try:
+                timestamp = datetime.datetime.fromisoformat(timestamp_str) if timestamp_str else None
+            except ValueError as e:
+                logger.error(f"command_id {command_id} の timestamp の解析に失敗しました: {e}")
+                timestamp = None
 
-            actions = []
-            for row in rows:
-                action = {
-                    "id": row[0],
-                    "action": row[1],
-                    "status": row[2],
-                    "details": row[3],
-                    "position": {
-                        "x": row[4],
-                        "y": row[5],
-                        "z": row[6]
-                    } if row[4] is not None and row[5] is not None and row[6] is not None else None,
-                    "timestamp": row[7]
-                }
-                actions.append(action)
-            span.output(f"successfully get {len(actions)} actions")
-        return actions
+            # 実行結果が存在する場合は CommandExecutionResultRecord を作成
+            execution_result: Optional[CommandExecutionResultRecord] = None
+            if exec_status:
+                try:
+                    exec_start_time = datetime.datetime.fromisoformat(exec_start_time_str) if exec_start_time_str else None
+                except ValueError as e:
+                    logger.error(f"command_id {command_id} の exec_start_time の解析に失敗しました: {e}")
+                    exec_start_time = None
 
+                try:
+                    exec_end_time = datetime.datetime.fromisoformat(exec_end_time_str) if exec_end_time_str else None
+                except ValueError as e:
+                    logger.error(f"command_id {command_id} の exec_end_time の解析に失敗しました: {e}")
+                    exec_end_time = None
 
+                try:
+                    exec_timestamp = datetime.datetime.fromisoformat(exec_timestamp_str) if exec_timestamp_str else None
+                except ValueError as e:
+                    logger.error(f"command_id {command_id} の exec_timestamp の解析に失敗しました: {e}")
+                    exec_timestamp = None
+
+                execution_result = CommandExecutionResultRecord(
+                    uid=command_id,  # command_id を uid として使用
+                    status=exec_status,
+                    detailed_info=exec_detailed_info,
+                    x=exec_x,
+                    y=exec_y,
+                    z=exec_z,
+                    start_time=exec_start_time,
+                    end_time=exec_end_time,
+                    timestamp=exec_timestamp
+                )
+
+            command = CommandRecord(
+                uid=command_id,
+                status=status,
+                description=action,
+                sequence_number=sequence_number,
+                is_active=bool(is_active),
+                additional_info=command_description,
+                args=args,
+                timestamp=timestamp,
+                execution_result=execution_result
+            )
+
+            commands.append(command)
+
+        logger.info(f"データベースから {len(commands)} 件のコマンドを取得しました。")
+        return commands
 
 # Knowledge
 

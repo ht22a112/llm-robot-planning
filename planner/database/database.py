@@ -9,7 +9,7 @@ class MemoryDatabase():
         self.current_job: Optional[JobRecord] = None
 
 from planner.database.sqlite import SQLiteInterface
-from planner.database.sqlite import LocationKnowledge, ObjectKnowledge, ActionHistory, PlanningHistory
+from planner.database.sqlite import LocationKnowledge, ObjectKnowledge, PlanningHistory
 from planner.database.chroma import ChromaDBWithGemini
 
 class DatabaseManager():
@@ -20,7 +20,6 @@ class DatabaseManager():
         
         #
         self._planning_history = PlanningHistory(self._sqlite_interface)
-        self._action_history = ActionHistory(self._sqlite_interface)
         self._location_knowledge = LocationKnowledge(self._sqlite_interface)
         #self.obj_db = ObjectKnowledge(self._sqlite_interface)
         
@@ -109,7 +108,7 @@ class DatabaseManager():
         )
         
     def get_all_actions(self) -> List[CommandRecord]:
-        return self._planning_history.get_all_command_execution_result()
+        return self._planning_history.get_all_commands()
 
     def get_all_known_locations(self) -> List[Location]:
         return self._location_knowledge.get_all()

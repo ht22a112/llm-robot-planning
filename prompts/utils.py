@@ -4,6 +4,7 @@ from utils.utils import replace_placeholders
 from prompts.prompt_texts.system_prompt import *
 from prompts.prompt_texts.retrieval_doc import *
 from prompts.prompt_texts.result_evaluate import *
+from prompts.prompt_texts.generate_tasks import *
 
 def get_prompt(
     prompt_name: str,
@@ -32,6 +33,8 @@ def get_prompt(
         prompt = RESULT_EVALUATE_PROMPT
     elif prompt_name == "REGENERATE_COMMANDS_FROM_TASK":
         prompt = regenerate_commands_from_task_prompt
+    elif prompt_name == "GENERATE_TASKS":
+        prompt = GENERATE_TASKS
     else:
         raise ValueError(f"prompt_name {prompt_name} is not supported")
     

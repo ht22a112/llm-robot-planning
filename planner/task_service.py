@@ -5,7 +5,7 @@ from planner.database.database import DatabaseManager
 from prompts.utils import get_prompt
 from utils.utils import to_json_str
 
-from planner.database.data_type import TaskRecord, CommandRecord
+from planner.database.data_type import TaskRecord, CommandRecord, DesiredInformation, DesiredRobotState, TaskDependencies, TaskEnvironmentalConditions, TaskOutcome
 from planner.result_evaluator import ReplanningData
 
 from logger.logger import LLMRobotPlannerLogSystem
@@ -26,6 +26,8 @@ class TaskService():
     
     def interpret_instruction(self, instruction: str) -> List[TaskRecord]:
         """
+        <-!- 削除予定 -!->
+        
         Args:
             instruction: str ユーザーからの指示（最初にロボットに与える命令）
         
@@ -63,6 +65,64 @@ class TaskService():
             ) for i, task in enumerate(response["tasks"].values())
         ]
     
+    def generate_tasks(self, instruction: str) -> List[TaskRecord]:
+        prompt = get_prompt(
+            prompt_name="GENERATE_TASKS",
+            replacements={
+                "instruction": instruction,
+            },
+            symbol=("{{", "}}")
+        )
+        
+        response = self._json_parser.parse(
+            text=self._llm.generate_content(
+                prompt=prompt, 
+                model_name=None
+            ),
+            response_type="json",
+            convert_type="dict"
+        )
+        
+        # TODO: ここでresponseの内容と形式が合っているか確認する処理の追加
+        # TODO: taskの依存関係を解析する処理の追加
+        return [
+            TaskRecord(
+                sequence_number=i,
+                description=task["task_description"], 
+                additional_info=task.get("task_additional_info"),
+                status="pending",
+                dependencies=[
+                    TaskDependencies(
+                        dependency_sequence_number=dep["dependency_task_sequence_number"],
+                        reason=dep["reason"],
+                        required_outcome_desired_robot_state_uids=dep.get("required_outcome_desired_robot_state_uids", []),
+                        required_outcome_desired_information_uids=dep.get("required_outcome_desired_information_uids", []),
+                    ) for dep in task.get("task_dependencies", [])
+                ],
+                environmental_conditions=TaskEnvironmentalConditions(
+                    required_physical_conditions=task.get("task_environmental_conditions", {}).get("required_physical_conditions", []),
+                    required_information_conditions=task.get("task_environmental_conditions", {}).get("required_information_conditions", []),
+                ),      
+                reason=task["task_reason"],
+                outcome=TaskOutcome(
+                    desired_information=[
+                        DesiredInformation(
+                            uid=info["uid"],
+                            description=info["description"]
+                        ) for info in task.get("task_outcome", []).get("desired_information", [])
+                    ],
+                    desired_robot_state=[
+                        DesiredRobotState(
+                            uid=state["uid"],
+                            state_name=state["state_name"],
+                            arg=state.get("arg", [])
+                        ) for state in task.get("task_outcome", []).get("desired_robot_state", [])
+                    ]
+                )
+            ) for i, task in enumerate(response["tasks"])
+        ]
+        
+        
     def reinterprete_instruction(
         self, 
         instruction: str, 

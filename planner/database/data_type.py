@@ -72,9 +72,9 @@ class _SequenceRecord(_DataRecordBase):
 
 @dataclass
 class ExecutionResultRecord(_TimeRecord):
-    uid: Optional[int] = None
+    uid: int = -1  # DBからの自動生成ID, -1は未登録を表す
     status: Union[Literal["success"], Literal["failure"]] = "success"
-    detailed_info: Optional[str] = None
+    detailed_info: str = ""
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
     
@@ -90,11 +90,41 @@ class CommandExecutionResultRecord(ExecutionResultRecord):
     y: Optional[float] = None
     z: Optional[float] = None
 
+#
+
+@dataclass
+class TaskDependencies():
+    dependency_sequence_number: int
+    reason: str
+    required_outcome_desired_information_uids: list = field(default_factory=list)
+    required_outcome_desired_robot_state_uids: list = field(default_factory=list)
+
+@dataclass
+class TaskEnvironmentalConditions():
+    required_physical_conditions: list = field(default_factory=list)
+    required_information_conditions: list = field(default_factory=list)
+
+@dataclass
+class TaskOutcome():
+    desired_information: list = field(default_factory=list)
+    desired_robot_state: list = field(default_factory=list)
+
+@dataclass
+class DesiredInformation():
+    uid: int
+    description: str
+
+@dataclass
+class DesiredRobotState():
+    uid: int
+    state_name: str
+    arg: List[Any] = field(default_factory=list)
+
 # --- コマンド、タスク、ジョブのデータクラス ---
 
 @dataclass
 class CommandRecord(_TimeRecord, _ContentRecord, _SequenceRecord):
-    uid: Optional[int] = None  # DBからの自動生成ID
+    uid: int = -1  # DBからの自動生成ID, -1は未登録を表す
     status: Union[
         Literal["pending"], 
         Literal["in_progress"], 
@@ -107,7 +137,7 @@ class CommandRecord(_TimeRecord, _ContentRecord, _SequenceRecord):
     
 @dataclass
 class TaskRecord(_TimeRecord, _ContentRecord, _SequenceRecord):
-    uid: Optional[int] = None  # DBからの自動生成ID
+    uid: int = -1  # DBからの自動生成ID, -1は未登録を表す
     status: Union[
         Literal["pending"], 
         Literal["in_progress"], 
@@ -115,12 +145,19 @@ class TaskRecord(_TimeRecord, _ContentRecord, _SequenceRecord):
         Literal["failure"], 
         Literal["canceled"]
     ] = "pending"
+    
+    #
+    dependencies: List[TaskDependencies] = field(default_factory=list)
+    environmental_conditions: TaskEnvironmentalConditions = field(default_factory=TaskEnvironmentalConditions)
+    reason: str = ""
+    outcome: TaskOutcome = field(default_factory=TaskOutcome)
+    
     execution_result: Optional[ExecutionResultRecord] = None  # Taskの実行結果
     commands: List[CommandRecord] = field(default_factory=list)
 
 @dataclass
 class JobRecord(_TimeRecord, _ContentRecord):
-    uid: Optional[int] = None  # DBからの自動生成ID
+    uid: int = -1  # DBからの自動生成ID, -1は未登録を表す
     status: Union[
         Literal["pending"], 
         Literal["in_progress"], 

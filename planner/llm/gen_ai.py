@@ -62,7 +62,7 @@ class UnifiedAIRequestHandler:
 
     def _get_model(self, model_name, supported_generation_methods) -> GenAIWrapper:
         # TODO: 後で実装
-        model_name = "models/gemini-1.5-flash"
+        model_name = "gemini-1.5-flash-002"
         if not self._models:
             logger.debug(f"initializing models: '{model_name}'") # TODO: 後で削除
             self._models[model_name] = GeminiWrapper(self.api_keys["google"], model_name)

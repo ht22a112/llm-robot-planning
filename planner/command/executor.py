@@ -1,19 +1,15 @@
-# from __future__ import annotations # python ver3.7 ~ 3.10は必要
 from planner.command.command_base import Command, CommandExecutionResult
+from planner.command.manager import CommandManager
 from planner.database.data_type import CommandRecord
-import planner.llm_robot_planner as _root
 from utils.utils import to_json_str
 
 from logger.logger import LLMRobotPlannerLogSystem
 log = LLMRobotPlannerLogSystem()
 
 class CommandExecutor:
-    def __init__(self, controller: '_root.LLMRobotPlanner'):
-        self._controller: '_root.LLMRobotPlanner' = controller
-        
-    def _get_command(self, name) -> Command:
-        return self._controller._commands[name]
-    
+    def __init__(self, command_manager: CommandManager):
+        self._cmd_manager: CommandManager = command_manager
+
     def execute_command(self, command: CommandRecord) -> CommandExecutionResult:
         """
         コマンドを実行する
@@ -35,7 +31,7 @@ class CommandExecutor:
         
         with log.action(f"コマンド: {command_name}") as action:
             action.input("args: " + to_json_str(args))
-            cmd = self._get_command(command_name)
+            cmd = self._cmd_manager._get_command(command_name)
             # コマンドの実行
             cmd.on_enter()
             exec_result = cmd.execute(**args)

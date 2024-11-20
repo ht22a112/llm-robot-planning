@@ -4,8 +4,8 @@ from datetime import datetime, timezone
 from planner.llm.gen_ai import UnifiedAIRequestHandler
 
 from planner.command.command_base import Command, CommandExecutionResult
-from planner.command.command_executor import CommandExecutor
-
+from planner.command.executor import CommandExecutor
+from planner.command.manager import CommandManager
 from planner.database.database import DatabaseManager
 from planner.database.data_type import TaskRecord, CommandRecord, JobRecord, CommandExecutionResultRecord
 from planner.task_service import TaskService
@@ -27,17 +27,18 @@ class LLMRobotPlanner():
         self._llm = UnifiedAIRequestHandler(
             api_keys=api_keys
         )
-        self._commands: Dict[str, Command] = {}
+        
         self._db: DatabaseManager = DatabaseManager() 
         self._task_service = TaskService(self._llm, self._db)
-        self._cmd_executor = CommandExecutor(self)
+        self._cmd_manager = CommandManager()
+        self._cmd_executor = CommandExecutor(self._cmd_manager)
         self._result_evaluator = ResultEvaluator(self._db, self._llm)
         
         #  TODO: テスト
         from planner.rag import RAG
         self._rag = RAG(self._db, self._llm)
         
-        self.register_command(commands)
+        self._cmd_manager.register_command(commands)
 
     def init_helper(self):
         """テスト用初期化メソッド"""
@@ -48,19 +49,6 @@ class LLMRobotPlanner():
     def _get_all_command_descriptions(self) -> List[str]:
         return [command.description for command in self._commands.values()]
     
-    def register_command(self, commands: List[Command]):
-        for command in commands:
-            if not isinstance(command, Command):
-                raise TypeError("command must be subclass of Command")
-
-            command_name = command.name
-            if command_name in self._commands:
-                raise ValueError(f"command: '{command_name}' is already registered. command name must be unique")
-            self._commands[command_name] = command
-            
-    def _get_command(self, name) -> Command:
-        # TODO: 追加の処理を追加する
-        return self._commands[name]
         
     def initialize(self):
         """

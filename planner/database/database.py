@@ -89,6 +89,12 @@ class DatabaseManager():
             command_id
         )
     
+    def update_command(self, command: CommandRecord):
+        self._planning_history.update_command(command)
+    
+    def update_task(self, task: TaskRecord):
+        self._planning_history.update_task(task)
+        
     def add_location_knowledge(
         self,
         location_id: str,
@@ -108,7 +114,7 @@ class DatabaseManager():
         )
         
     def get_all_actions(self) -> List[CommandRecord]:
-        return self._planning_history.get_all_commands()
+        return self._planning_history.get_all_executed_commands()
 
     def get_all_known_locations(self) -> List[Location]:
         return self._location_knowledge.get_all()

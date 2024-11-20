@@ -294,7 +294,6 @@ class LLMRobotPlannerLogSystem():
         except Exception as e:
             # TODO: Errorのログの記録方法を変える
             self._update_current_entry(feedback=str(e))
-            self._end_log_entry()
             raise e
         finally:
             self._end_log_entry()
@@ -313,7 +312,6 @@ class LLMRobotPlannerLogSystem():
         except Exception as e:
             # TODO: Errorのログの記録方法を変える
             self._update_current_entry(feedback=str(e))
-            self._end_log_entry()
             raise e
         finally:
             self._end_log_entry()
@@ -332,7 +330,6 @@ class LLMRobotPlannerLogSystem():
         except Exception as e:
             # TODO: Errorのログの記録方法を変える
             self._update_current_entry(feedback=str(e))
-            self._end_log_entry()
             raise e
         finally:
             self._end_log_entry()

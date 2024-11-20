@@ -52,7 +52,7 @@ class UnifiedAIRequestHandler:
             生成結果（文字列、リスト、または辞書）
         """
         
-        with log.span("LLM Generation") as span:
+        with log.span("LLM Generation",metadata={"model": "gemini-1.5-flash"}) as span:
             span.input(prompt)
             response_text = self._get_model(model_name, "generate_content").generate_content(prompt, *args, **kwargs)
             span.output(response_text)

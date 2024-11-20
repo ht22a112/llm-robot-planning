@@ -137,5 +137,5 @@ class ErrorCommand(Command):
     
     def execute(self, message) -> CommandExecutionResult:
         return CommandExecutionResult(
-            status="success"
+            status="failure"
         )

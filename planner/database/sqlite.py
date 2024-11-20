@@ -158,6 +158,7 @@ class PlanningHistory:
         Returns:
             int: 追加したJobのUID
         """
+        assert job.uid == -1, "JobRecord の UID は -1（未登録を示す）である必要があります。"
         self._cursor.execute('''
             INSERT INTO Jobs (content, status, timestamp)
             VALUES (?, ?, ?)
@@ -182,6 +183,7 @@ class PlanningHistory:
         Returns:
             int: 追加したTaskのUID
         """
+        assert task.uid == -1, "TaskRecord の UID は -1（未登録を示す）である必要があります。"
         self._cursor.execute('''
             INSERT INTO Tasks (job_id, sequence_number, status, task_name, task_details, timestamp)
             VALUES (?, ?, ?, ?, ?, ?)
@@ -232,6 +234,7 @@ class PlanningHistory:
         Returns:
             int: 追加したCommandのUID
         """
+        assert command.uid == -1, "CommandRecord の UID は -1（未登録を示す）である必要があります。"
         command_args_json = json.dumps(command.args) if command.args else None
         self._cursor.execute('''
             INSERT INTO Commands (task_id, sequence_number, action, status, command_description, command_args, timestamp)
@@ -239,7 +242,7 @@ class PlanningHistory:
         ''', (
             task_id,
             command.sequence_number,
-            command.action,
+            command.description,
             command.status,
             command.additional_info,
             command_args_json,
@@ -286,6 +289,11 @@ class PlanningHistory:
         Returns:
             None
         """
+        assert entity_type in ['instruction', 'task', 'command'], f"entity_type は 'instruction', 'task', 'command' のいずれかである必要があります。"
+        assert isinstance(execution_result, ExecutionResultRecord) or isinstance(execution_result, CommandExecutionResultRecord), "execution_result は ExecutionResultRecord または CommandExecutionResultRecord のいずれかである必要があります。"
+        assert execution_result.uid == -1, "ExecutionResultRecord の UID は -1（未登録を示す）である必要があります。"
+        assert entity_id > 0, "entity_id は 1以上の整数である必要があります。"
+        
         if entity_type == 'instruction':
             self._cursor.execute('''
                 INSERT INTO InstructionExecutionResults (job_id, status, detailed_info, start_time, end_time, timestamp)
@@ -328,8 +336,6 @@ class PlanningHistory:
                 execution_result.timestamp.isoformat()
             ))
             logger.info(f"CommandExecutionResult を Command {entity_id} に追加しました。")
-        else:
-            raise ValueError("Invalid entity_type or execution_result type.")
         
         self._conn.commit()
 
@@ -362,6 +368,8 @@ class PlanningHistory:
         logger.info(f"ReplanningEvent {replanning_event_id} を追加しました。")
         return replanning_event_id
 
+    # --- データ取得関数 ---
+    
     def get_all_command_execution_result(self) -> List[CommandExecutionResultRecord]:
         """
         全てのCommandExecutionResultsを取得する
@@ -506,7 +514,7 @@ class PlanningHistory:
         self._cursor.execute('''
             SELECT task_id, sequence_number, status, task_name, task_details, timestamp
             FROM Tasks
-            WHERE job_id = ? AND status IN ('success', 'failure', 'canceled')
+            WHERE job_id = ? AND status IN ('success', 'failure')
             ORDER BY sequence_number
         ''', (job_id,))
         rows = self._cursor.fetchall()
@@ -567,7 +575,7 @@ class PlanningHistory:
         self._cursor.execute('''
             SELECT command_id, sequence_number, action, status, command_description, command_args, timestamp
             FROM Commands
-            WHERE task_id = ? AND status IN ('success', 'failure', 'canceled')
+            WHERE task_id = ? AND status IN ('success', 'failure')
             ORDER BY sequence_number
         ''', (task_id,))
         rows = self._cursor.fetchall()
@@ -631,8 +639,143 @@ class PlanningHistory:
         logger.info(f"Task {task_id} から {len(commands)} 件の実行済みCommandを取得しました。")
         return commands
 
+    def get_all_executed_commands(self) -> List[CommandRecord]:
+        """
+        データベース内のすべての実行済みコマンドを取得する
 
+        Returns:
+            List[CommandRecord]: 実行済みのコマンドのリスト
+        """
+        self._cursor.execute('''
+            SELECT 
+                c.command_id, 
+                c.task_id, 
+                c.sequence_number, 
+                c.action, 
+                c.status, 
+                c.command_description, 
+                c.command_args, 
+                c.timestamp,
+                cer.status AS exec_status,
+                cer.detailed_info AS exec_detailed_info,
+                cer.x AS exec_x,
+                cer.y AS exec_y,
+                cer.z AS exec_z,
+                cer.start_time AS exec_start_time,
+                cer.end_time AS exec_end_time,
+                cer.timestamp AS exec_timestamp
+            FROM Commands c
+            LEFT JOIN CommandExecutionResults cer ON c.command_id = cer.command_id
+            WHERE c.status IN ('success', 'failure')
+            ORDER BY c.command_id ASC
+        ''')
+        rows = self._cursor.fetchall()
 
+        commands = []
+        for row in rows:
+            (
+                command_id, task_id, seq_num, action, status, description, args_json, ts,
+                exec_status, exec_detailed_info, exec_x, exec_y, exec_z, 
+                exec_start_time_str, exec_end_time_str, exec_timestamp_str
+            ) = row
+
+            # JSON 形式の command_args を解析
+            try:
+                args = json.loads(args_json) if args_json else {}
+            except json.JSONDecodeError as e:
+                logger.error(f"Command {command_id} の args デコードに失敗しました: {e}")
+                args = {}
+
+            # タイムスタンプを datetime オブジェクトに変換
+            try:
+                timestamp = datetime.fromisoformat(ts) if ts else None
+            except ValueError as e:
+                logger.error(f"Command {command_id} の timestamp 解析に失敗しました: {e}")
+                timestamp = None
+
+            # 実行結果が存在する場合は CommandExecutionResultRecord を作成
+            execution_result: Optional[CommandExecutionResultRecord] = None
+            if exec_status:
+                try:
+                    exec_start_time = datetime.fromisoformat(exec_start_time_str) if exec_start_time_str else None
+                    exec_end_time = datetime.fromisoformat(exec_end_time_str) if exec_end_time_str else None
+                    exec_timestamp = datetime.fromisoformat(exec_timestamp_str) if exec_timestamp_str else None
+                except ValueError as e:
+                    logger.error(f"Command {command_id} の ExecutionResult のタイムスタンプ解析に失敗しました: {e}")
+                    exec_start_time = exec_end_time = exec_timestamp = None
+
+                execution_result = CommandExecutionResultRecord(
+                    status=exec_status,
+                    detailed_info=exec_detailed_info,
+                    x=exec_x,
+                    y=exec_y,
+                    z=exec_z,
+                    start_time=exec_start_time,
+                    end_time=exec_end_time,
+                    timestamp=exec_timestamp
+                )
+
+            command = CommandRecord(
+                uid=command_id,
+                status=status,
+                description=action,
+                sequence_number=seq_num,
+                additional_info=description,
+                args=args,
+                timestamp=timestamp,
+                execution_result=execution_result
+            )
+            commands.append(command)
+        
+        logger.info(f"データベースから {len(commands)} 件の実行済みCommandを取得しました。")
+        return commands
+
+    def update_command(self, command: CommandRecord):
+        """
+        コマンド情報を更新する
+
+        Args:
+            command: CommandRecord 更新するコマンド情報
+
+        Returns:
+            None
+        """
+        self._cursor.execute('''
+            UPDATE Commands
+            SET status = ?, command_description = ?, command_args = ?
+            WHERE command_id = ?
+        ''', (
+            command.status,
+            command.description,
+            json.dumps(command.args) if command.args else None,
+            command.uid
+        ))
+        self._conn.commit()
+        logger.info(f"Command {command.uid} の情報を更新しました。")    
+
+    def update_task(self, task: TaskRecord):
+        """
+        タスク情報を更新する
+        
+        Args:
+            task: TaskRecord 更新するタスク情報
+            
+        Returns:
+            None
+        """
+        self._cursor.execute('''
+            UPDATE Tasks
+            SET status = ?, task_name = ?, task_details = ?
+            WHERE task_id = ?
+        ''', (
+            task.status,
+            task.description,
+            task.additional_info,
+            task.uid
+        ))
+        self._conn.commit()
+        logger.info(f"Task {task.uid} の情報を更新しました。")
+        
 # Knowledge
 class Knowledge():
     pass

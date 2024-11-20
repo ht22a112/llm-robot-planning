@@ -22,6 +22,8 @@ def get_prompt(
     """
     if prompt_name == "interpret_instruction":
         prompt = interpret_instruction_prompt
+    elif prompt_name == "reinterpret_instruction":
+        prompt = reinterpret_instruction_prompt
     elif prompt_name == "generate_commands_from_task":
         prompt = generate_commands_from_task_prompt
     elif prompt_name == "GENERATE_QUERY":

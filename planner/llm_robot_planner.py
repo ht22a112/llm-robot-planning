@@ -103,7 +103,7 @@ class LLMRobotPlanner():
             span.input(f"指示: {job.description}")
             
             # タスクの生成
-            tasks = self._task_service.interpret_instruction(job.description)
+            tasks = self._task_service.generate_tasks(job.description)
             
             # タスクをデータベースに登録
             self._db.add_tasks_to_job(tasks=tasks, job_id=job.uid)
@@ -224,15 +224,15 @@ class LLMRobotPlanner():
                 logger.info(f"{cmd.sequence_number}> {cmd.description}: {cmd.args}")
         return commands
     
-    def _execute_command(self, command: CommandRecord) -> CommandExecutionResult:
+    def _execute_command(self, command: CommandRecord) -> CommandRecord:
         """
-        コマンドを実行する
+        引数に与えられたCommandRecordに対応するコマンドを実行して、そのコマンド実行結果を記録する
         
         Args:
             command: CommandRecord
         
         Returns:
-            CommandExecutionResult
+            CommandRecord: 実行結果を含むCommandRecord
         """
         # コマンドの実行
         start_time = datetime.now(timezone.utc)
@@ -253,7 +253,7 @@ class LLMRobotPlanner():
             command_id=command.uid
         )
         self._db.update_command(command)
-        return cmd_result
+        return command
     
     def _execute_command_list(
         self, 
@@ -270,7 +270,7 @@ class LLMRobotPlanner():
                 exec_result = self._execute_command(cmd)
                 
                 # コマンドの実行結果の評価および分析
-                evaluate_result = self._result_evaluator.evaluate(task, cmd, exec_result)
+                evaluate_result = self._result_evaluator.evaluate_execution_command_result(task, cmd)
                 if evaluate_result["is_replanning_needed"]:
                     # replanning
                     span.output(f"失敗")

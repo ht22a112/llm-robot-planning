@@ -1,4 +1,3 @@
-from planner.command.command_base import CommandExecutionResult
 from planner.database.data_type import CommandExecutionResultRecord, TaskRecord, CommandRecord
 from planner.database.database import DatabaseManager
 from planner.llm.gen_ai import UnifiedAIRequestHandler as LLM
@@ -6,7 +5,7 @@ from planner.llm.parser import JsonParser
 from prompts.utils import get_prompt
 from utils.utils import to_json_str
 
-from typing import TypedDict, Literal, Union, Dict
+from typing import TypedDict, Literal, Union, Dict, List
 
 from logger.logger import LLMRobotPlannerLogSystem
 log = LLMRobotPlannerLogSystem()
@@ -26,16 +25,15 @@ class ResultEvaluator:
         self._llm: LLM = llm
         self._json_parser = JsonParser()
         
-    def evaluate(
+    def evaluate_execution_command_result(
         self,
         current_task: TaskRecord,
         current_command: CommandRecord,
-        command_result: CommandExecutionResult,
     ) -> EvaluatorResult:
         
         r_data = {}
-        if command_result.status == "failure":
-            replanning_datas = self._generate_replanning_data(current_task, current_command, command_result)
+        if current_command.status == "failure":
+            replanning_datas = self._generate_replanning_data(current_task, current_command)
             for i in range(len(replanning_datas)):
                 r_data[f"{i+1}"] = ReplanningData(
                     replanning_level=replanning_datas[f"{i+1}"]["error_level"],
@@ -44,17 +42,30 @@ class ResultEvaluator:
                 )
             
         return EvaluatorResult(
-            is_replanning_needed=(command_result.status == "failure"),
+            is_replanning_needed=(current_command.status == "failure"),
             replanning_data=r_data
         )
 
+    def evaluate_execution_task_result(
+        self,
+        current_task: TaskRecord,
+        current_commands: List[CommandRecord],
+    ):
+        """
+        タスクの実行結果を意図した結果を得られているか評価する
+        """
+        pass
+        # current_task.outcome.desired_information
+        # current_task.outcome.desired_robot_state
+    
+    
     def _generate_replanning_data(
         self,
         current_task: TaskRecord, 
-        current_command: CommandRecord, 
-        command_result: CommandExecutionResult
+        current_command: CommandRecord
     ):
         with log.span(name="Evaluate Result") as span:
+            assert isinstance(current_command.execution_result, CommandExecutionResultRecord), "current_command.execution_result は CommandExecutionResultRecord である必要があります。"
             prompt = get_prompt(
                 prompt_name="EVALUATE_RESULT",
                 replacements={
@@ -67,8 +78,8 @@ class ResultEvaluator:
                         "args": current_command.args,
                     }),
                     "command_execution_result": to_json_str({
-                        "status": command_result.status,
-                        "detailed_info": command_result.details,
+                        "status": current_command.status,
+                        "detailed_info": current_command.execution_result.detailed_info,
                     })
                 },
                 symbol=("{{", "}}")

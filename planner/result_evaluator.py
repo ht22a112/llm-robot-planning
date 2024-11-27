@@ -14,6 +14,9 @@ class ReplanningData(TypedDict):
     replanning_level: Literal["task", "command"]
     cause: str
     detail: str
+    solution: str
+    failed_task_sequence_number: int  # エラーが発生したタスクの実行ID
+    failed_command_sequence_number: int  # エラーが発生したコマンドの実行ID
     
 class EvaluatorResult(TypedDict):
     is_replanning_needed: bool
@@ -38,7 +41,10 @@ class ResultEvaluator:
                 r_data[f"{i+1}"] = ReplanningData(
                     replanning_level=replanning_datas[f"{i+1}"]["error_level"],
                     cause=replanning_datas[f"{i+1}"]["cause"],
-                    detail=replanning_datas[f"{i+1}"]["detail"]
+                    detail=replanning_datas[f"{i+1}"]["detail"],
+                    solution=replanning_datas[f"{i+1}"]["solution"],
+                    failed_task_sequence_number=current_task.sequence_number,
+                    failed_command_sequence_number=current_command.sequence_number
                 )
             
         return EvaluatorResult(

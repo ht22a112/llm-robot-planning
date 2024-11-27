@@ -1,5 +1,5 @@
 
-from planner.llm_robot_planner import LLMRobotPlanner
+from planner.llm_robot_planner import LLMRobotPlanner, RobotState
 from planner.command.commands.standard_commands import *
 from utils.utils import read_key_value_pairs
 
@@ -27,16 +27,30 @@ def process_llm_robot_planner():
             AskQuestionCommand(),
             PickUpObjectCommand(),
             DropObjectCommand(),
+            RecordCurrentLocationCommand(),
             ErrorCommand(),
+        ],
+        states=[
+            RobotState(
+                name="not_in_hand",
+                description="ロボットが手に何も持っていない",
+                args_description={},
+                initial_state=True
+            ),
+            RobotState(
+                name="in_hand",
+                description="ロボットがxを手に持っている",
+                args_description={"x": "str"},
+                initial_state=False
+            )
         ]
     )
 
-    planner.initialize(
-        input("What do you want to do?: ")
+    planner.initialize()
+    planner.process(
+        instruction=input("What do you want to do?: "), 
+        additional_info=""
     )
-
-    for _ in planner.process():
-        LLM_logger.info("")
 
 # Console用 Logger
 console_handler = logging.StreamHandler()

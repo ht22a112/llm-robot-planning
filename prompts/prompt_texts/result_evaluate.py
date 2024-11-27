@@ -12,13 +12,15 @@ RESULT_EVALUATE_PROMPT = \
 - error_levelはcommand_levelとtask_levelの２つがあります。
     command_level: コマンドの組み合わせの問題、もしくはコマンドに与える引数の問題で、コマンドの組み合わせの再生成で実行の失敗に対処できる
     task_level: 指示をタスクにステップごとに分解するときの問題、タスクの再生成で失敗を解決できる
+- solutionは原因を解決するための対処方法を記述してください
 
 Json format example:
 {
     "1":{
         "cause": "オブジェクトの遮蔽",
         "detail":  "他の物体がリンゴを遮蔽していて、カメラから見えなかった可能性があります。",
-        "error_level": "task_level"
+        "error_level": "command_level",
+        "solution": "ロボットの位置を調整する"
     },
     etc...
 }

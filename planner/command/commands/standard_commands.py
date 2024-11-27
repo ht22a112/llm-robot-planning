@@ -1,4 +1,4 @@
-from planner.command.command_base import Command, CommandExecutionResult
+from planner.command.command_base import Command, StateChange, CommandExecutionResult
 
 import logging
 logger = logging.getLogger("LLMCommand")
@@ -34,7 +34,7 @@ class FindCommand(Command):
     def __init__(self) -> None:
         super().__init__(
             name="find",
-            description='ロボットのカメラを用いて見つける',
+            description='ロボットのカメラを用いて<object>を探すコマンド',
             execute_args_description={"object": "<object_name>"}
         )
         
@@ -73,7 +73,7 @@ class SpeakMessageCommand(Command):
     def __init__(self) -> None:
         super().__init__(
             name="speak_message",
-            description='<content>について、ロボットのスピーカーを用いて発話する。 このコマンドは主にユーザーに対して発話、回答、応答、説明、伝達を行う為に用いる',
+            description='ロボットのスピーカーを使用して<message>を発話する。',
             execute_args_description={"speak_message": "<message>"}
         )
     
@@ -102,6 +102,7 @@ class PickUpObjectCommand(Command):
         super().__init__(
             name="pick_up_object",
             description='ロボットのカメラとロボットについているアームを使用して物やオブジェクトを掴む',
+            state_list=[],
             execute_args_description={"object": "<object_name>"},
             execute_required_known_arguments=["object"],
         )
@@ -109,7 +110,8 @@ class PickUpObjectCommand(Command):
     def execute(self, object) -> CommandExecutionResult:
         time.sleep(1) # TODO: 後で消す
         return CommandExecutionResult(
-            status="success"
+            status="success",
+            state_changes=[StateChange("in_hand", True), StateChange("not_in_hand", False, args={})]
         )
     
 class DropObjectCommand(Command):
@@ -117,11 +119,28 @@ class DropObjectCommand(Command):
         super().__init__(
             name="drop_object",
             description='ロボットのカメラとロボットが持っているアームを使用して持っている物やオブジェクトを落とす',
+            state_list=[
+                
+            ],
             execute_args_description={"object": "<object_name>"},
             execute_required_known_arguments=["object"],
         )
         
     def execute(self, object) -> CommandExecutionResult:
+        time.sleep(1) # TODO: 後で消す
+        return CommandExecutionResult(
+            status="success",
+            state_changes=[StateChange("in_hand", False), StateChange("not_in_hand", True, args={"x": str(object)})]
+        )
+
+class RecordCurrentLocationCommand(Command):
+    def __init__(self) -> None:
+        super().__init__(
+            name="record_current_location",
+            description='ロボットの現在位置を記録するコマンド',
+        )
+        
+    def execute(self) -> CommandExecutionResult:
         time.sleep(1) # TODO: 後で消す
         return CommandExecutionResult(
             status="success"

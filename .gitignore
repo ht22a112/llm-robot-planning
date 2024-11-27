@@ -2,6 +2,7 @@
 __pycache__/
 .vscode/
 test.py
+count_rows.py
 test/
 tempCodeRunnerFile.py
 log/

@@ -3,7 +3,7 @@ from datetime import datetime
 import sqlite3
 import json
 
-from planner.database.data_type import Location, Position
+from planner.database.data_type import Position, Location, Object
 from planner.database.data_type import JobRecord, TaskRecord, CommandRecord, ExecutionResultRecord, CommandExecutionResultRecord
 from logger.logger import LLMRobotPlannerLogSystem
 log = LLMRobotPlannerLogSystem()
@@ -785,7 +785,8 @@ class ObjectKnowledge(Knowledge):
         self._sqlite_interface: SQLiteInterface = sqlite_interface
         self._cursor: sqlite3.Cursor = sqlite_interface._cursor
         self._conn: sqlite3.Connection = sqlite_interface._conn
-    
+        self._create_table()
+        
     def _create_table(self):
         # TODO: 後で過去のデーターベースの削除や保存方法の変更
         self._cursor.execute('''DROP TABLE IF EXISTS objects''')
@@ -812,7 +813,17 @@ class ObjectKnowledge(Knowledge):
             # TODO: あとで仕様を変える
             raise e
 
-    def insert_object(self, object_id: str, object_type: str, description: str, x: float, y: float, z: float, confidence: float, metadata: str):
+    def add(
+        self, 
+        object_id: str, 
+        object_type: str, 
+        description: str, 
+        x: Optional[float],
+        y: Optional[float],
+        z: Optional[float],
+        confidence: float = 1.0,
+        metadata: Optional[str] = None
+    ):
         self._cursor.execute(f'''
         INSERT INTO objects (object_id, object_type, description, x, y, z, confidence, metadata)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -828,6 +839,77 @@ class ObjectKnowledge(Knowledge):
         ))
         self._conn.commit()
     
+    def delete(self, object_id: str) -> bool:
+        """
+        指定したobject_idのデータを削除する
+
+        args:
+            object_id: str 削除するデータのobject_id
+
+        return:
+            bool 削除が成功した場合はTrue、失敗した場合はFalse
+        """
+        self._cursor.execute('''
+        DELETE FROM objects WHERE object_id = ?
+        ''', (object_id,))
+        self._conn.commit()
+        return self._cursor.rowcount > 0
+
+    def get_all(self) -> List[Object]:
+        """
+        すべてのオブジェクト情報を取得する
+
+        return:
+            list: すべてのオブジェクト情報が含まれたリスト
+        """
+        self._cursor.execute('''
+        SELECT object_id, object_type, description, x, y, z, confidence, timestamp, metadata
+        FROM objects
+        ''')
+        rows = self._cursor.fetchall()
+
+        return [
+            Object(
+                uid=row[0],
+                name=row[1],
+                description=row[2],
+                position=Position(row[3], row[4], row[5]),
+                confidence=row[6],
+                timestamp=row[7],
+                metadata=row[8]
+            ) for row in rows
+        ]
+    
+    def get_by_name(self, object_type: str) -> List[Object]:
+        """
+        指定されたobject_typeに一致するオブジェクト情報を取得する
+
+        args:
+            object_type: str 取得するオブジェクトのタイプ
+
+        return:
+            list: 一致するオブジェクト情報が含まれたリスト
+        """
+        self._cursor.execute('''
+        SELECT object_id, object_type, description, x, y, z, confidence, timestamp, metadata
+        FROM objects
+        WHERE object_type = ?
+        ''', (object_type,))
+        rows = self._cursor.fetchall()
+
+        return [
+            Object(
+                uid=row[0],
+                name=row[1],
+                description=row[2],
+                position=Position(row[3], row[4], row[5]),
+                confidence=row[6],
+                timestamp=row[7],
+                metadata=row[8]
+            ) for row in rows
+        ]
+
+
     
 class LocationKnowledge(Knowledge):
     def __init__(self, sqlite_interface: SQLiteInterface):
@@ -855,10 +937,10 @@ class LocationKnowledge(Knowledge):
     def add(self, 
         location_id: str, 
         location_name: str, 
-        description: str, 
-        x: float, 
-        y: float, 
-        z: float,
+        description: Optional[str], 
+        x: Optional[float], 
+        y: Optional[float], 
+        z: Optional[float],
         timestamp: Optional[float] = None
     ):
         """
@@ -905,10 +987,7 @@ class LocationKnowledge(Knowledge):
         self._conn.commit()
         return self._cursor.rowcount > 0
     
-        
-    def get(self, ):
-        pass
-    
+            
     def get_all(self) -> List[Location]:
         """
         すべてのロケーション情報を取得する
@@ -935,23 +1014,32 @@ class LocationKnowledge(Knowledge):
                     timestamp=row[6]
                 ) for row in rows
             ]
+    
+    
+    def get_by_name(self, location_name: str) -> List[Location]:
+        """
+        指定されたlocation_nameに一致するロケーション情報を取得する
+
+        args:
+            location_name: str 取得するロケーション名
+
+        return:
+            list: 一致するロケーション情報が含まれたリスト
+        """
+        self._cursor.execute('''
+        SELECT location_id, location_name, description, x, y, z, timestamp
+        FROM locations
+        WHERE location_name = ?
+        ''', (location_name,))
         
-    
-    
-    # def _create_object_table(self):
-    #     """必要なテーブルを作成（存在しない場合のみ）"""
-    #     self._cursor.execute('''
-    #     CREATE TABLE IF NOT EXISTS data (
-    #         object_id TEXT PRIMARY KEY,
-    #         object_type TEXT,
-    #         description TEXT,
-    #         frame TEXT,
-    #         x REAL,
-    #         y REAL,
-    #         z REAL,
-    #         confidence REAL,
-    #         timestamp TEXT
-    #     )
-    #     ''')
-    #     self.conn.commit()
-    
+        rows = self._cursor.fetchall()
+        
+        return [
+            Location(
+                uid=row[0],
+                name=row[1],
+                description=row[2],
+                position=Position(row[3], row[4], row[5]),
+                timestamp=row[6]
+            ) for row in rows
+        ]

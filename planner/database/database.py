@@ -1,5 +1,5 @@
-from typing import Optional, List, Literal, Dict, Any
-from planner.database.data_type import Location, JobRecord, TaskRecord, CommandRecord, CommandExecutionResultRecord, ExecutionResultRecord 
+from typing import Optional, List, Literal, Dict, Any, Union
+from planner.database.data_type import Location, JobRecord, TaskRecord, CommandRecord, CommandExecutionResultRecord, Object, Location 
 
 from logger.logger import LLMRobotPlannerLogSystem
 log = LLMRobotPlannerLogSystem()
@@ -21,7 +21,7 @@ class DatabaseManager():
         #
         self._planning_history = PlanningHistory(self._sqlite_interface)
         self._location_knowledge = LocationKnowledge(self._sqlite_interface)
-        #self.obj_db = ObjectKnowledge(self._sqlite_interface)
+        self._object_knowledge = ObjectKnowledge(self._sqlite_interface)
         
         #
         from utils.utils import read_key_value_pairs
@@ -94,15 +94,18 @@ class DatabaseManager():
     
     def update_task(self, task: TaskRecord):
         self._planning_history.update_task(task)
-        
+    
+    
+    # --- Knowledges ---
+    
     def add_location_knowledge(
         self,
         location_id: str,
         location_name: str,
         description: str,
-        x: float,
-        y: float,
-        z: float
+        x: Optional[float],
+        y: Optional[float],
+        z: Optional[float]
     ):
         self._location_knowledge.add(
             location_id=location_id,
@@ -110,14 +113,53 @@ class DatabaseManager():
             description=description,
             x=x,
             y=y,
-            z=z
-        )
-        
+            z=z)
+    def get_all_known_locations(self) -> List[Location]:
+        return self._location_knowledge.get_all()
+    
+    def add_object_knowledge(
+        self,
+        object_id: str,
+        object_type: str,
+        description: str,
+        x: Optional[float],
+        y: Optional[float],
+        z: Optional[float],
+    ):
+        self._object_knowledge.add(
+            object_id=object_id,
+            object_type=object_type,
+            description=description,
+            x=x,
+            y=y,
+            z=z)
+    
+    def get_all_known_objects(self) -> List[Object]:
+        return self._object_knowledge.get_all()
+    
+    def get_by_name_from_knowledge(self, name: str) -> List[Union[Location, Object]]:
+        """
+        名前でロケーションやオブジェクトを検索する
+        指定されたnameに一致するロケーションやオブジェクトを検索し、
+        その結果を返す
+
+        Args:
+            name: str 検索する名前
+
+        Returns:
+            list: 検索結果（ロケーションやオブジェクトのリスト）
+        """
+        # LocationKnowledgeから検索
+        locations = self._location_knowledge.get_by_name(name)
+        # ObjectKnowledgeから検索
+        objects = self._object_knowledge.get_by_name(name)
+        return locations + objects
+    
+    # --- Planning History ---
+    
     def get_all_actions(self) -> List[CommandRecord]:
         return self._planning_history.get_all_executed_commands()
 
-    def get_all_known_locations(self) -> List[Location]:
-        return self._location_knowledge.get_all()
     
     
     def query_document(self, query_text: str, n_results: int = 1, distance_threshold: Optional[float] = 1) -> List[str]:
@@ -128,8 +170,9 @@ class DatabaseManager():
                 if distance_threshold is None or distance < distance_threshold:
                     l.append(document)
         return l
-        
     
+
+        
     def init_helper(self):
         """テスト用初期化メソッド"""
         
@@ -159,31 +202,47 @@ class DatabaseManager():
                 y=8.0,
                 z=0.0)
             
-            import uuid
-            l = [
-                    "There is one desk in the kitchen.",
-                    "Tanaka and Maeda are having a conversation in the living room.",
-                    "There are shoes at the entrance.",
-                    "There are two desks in the living room.",
-                    "There is a TV in the living room.",
-                    "There is a living room next to the kitchen",
-                    "Mr. Tanaka works as an engineer at a tech company.",
-                    "Mr. Tanaka enjoys hiking on weekends and exploring nature.",
-                    "Mr. Tanaka is fluent in English and Japanese.",
-                    "Mr. Tanaka has a collection of vintage vinyl records, primarily jazz and rock.",
-                    "Mr. Tanaka studied mechanical engineering at a university in Tokyo.",
-                    "Mr. Tanaka is known for his expertise in robotics and artificial intelligence.",
-                    "Mr. Tanaka regularly volunteers at a local animal shelter.",
-                    "Mr. Tanaka is an avid reader and especially enjoys historical fiction.",
-                    "Mr. Tanaka has traveled to over 15 countries, including Italy, Canada, and South Africa.",
-                    "Mr. Tanaka plays the guitar and occasionally performs at local cafes.",
-            ]
-            self._document_db.upsert(
-                l,
-                [
-                    uuid.uuid4().hex for _ in range(len(l))
-                ]
+            self.add_object_knowledge(
+                object_id="椅子_001",
+                object_type="椅子",
+                description="家の椅子",
+                x=1.0,
+                y=2.0,
+                z=0.0
             )
+            self.add_object_knowledge(
+                object_id="机_001",
+                object_type="机",
+                description="家の机",
+                x=4.0,
+                y=5.0,
+                z=0.0
+            )
+            # import uuid
+            # l = [
+            #         "There is one desk in the kitchen.",
+            #         "Tanaka and Maeda are having a conversation in the living room.",
+            #         "There are shoes at the entrance.",
+            #         "There are two desks in the living room.",
+            #         "There is a TV in the living room.",
+            #         "There is a living room next to the kitchen",
+            #         "Mr. Tanaka works as an engineer at a tech company.",
+            #         "Mr. Tanaka enjoys hiking on weekends and exploring nature.",
+            #         "Mr. Tanaka is fluent in English and Japanese.",
+            #         "Mr. Tanaka has a collection of vintage vinyl records, primarily jazz and rock.",
+            #         "Mr. Tanaka studied mechanical engineering at a university in Tokyo.",
+            #         "Mr. Tanaka is known for his expertise in robotics and artificial intelligence.",
+            #         "Mr. Tanaka regularly volunteers at a local animal shelter.",
+            #         "Mr. Tanaka is an avid reader and especially enjoys historical fiction.",
+            #         "Mr. Tanaka has traveled to over 15 countries, including Italy, Canada, and South Africa.",
+            #         "Mr. Tanaka plays the guitar and occasionally performs at local cafes.",
+            # ]
+            # self._document_db.upsert(
+            #     l,
+            #     [
+            #         uuid.uuid4().hex for _ in range(len(l))
+            #     ]
+            # )
             
             span.output("database initialized")
         

@@ -31,7 +31,7 @@ class CommandExecutor:
         
         with log.action(f"コマンド: {command_name}") as action:
             action.input("args: " + to_json_str(args))
-            cmd = self._cmd_manager._get_command(command_name)
+            cmd = self._cmd_manager.get_command(command_name)
             # コマンドの実行
             cmd.on_enter()
             exec_result = cmd.execute(**args)

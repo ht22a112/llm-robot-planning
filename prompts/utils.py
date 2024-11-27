@@ -35,6 +35,8 @@ def get_prompt(
         prompt = regenerate_commands_from_task_prompt
     elif prompt_name == "GENERATE_TASKS":
         prompt = GENERATE_TASKS
+    elif prompt_name == "REGENERATE_TASKS":
+        prompt = REGENERATE_TASKS
     else:
         raise ValueError(f"prompt_name {prompt_name} is not supported")
     

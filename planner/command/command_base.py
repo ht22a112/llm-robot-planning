@@ -1,22 +1,53 @@
-from __future__ import annotations
 from typing import Literal, List, Dict
 from abc import ABC, abstractmethod
+from planner.command.robot_state import RobotState, StateChange
 import inspect
 
 import logging
 logger = logging.getLogger("LLMCommand")
-
     
+class CommandExecutionResult():
+    def __init__(
+        self,
+        status: Literal["success", "failure"],
+        state_changes: List[StateChange] = [],
+        details: str = ""
+    ) -> None:
+        self.cmd_name = ""
+        self.cmd_args: Dict[str, str] = {}
+        self.status: Literal['success', 'failure'] = status
+        self.details: str = details
+        self.state_changes: List[StateChange] = state_changes
+        
+    def __str__(self) -> str:
+        return f"[{self.cmd_name}] status: {self.status}"
+    
+    def __repr__(self) -> str:
+        return self.__str__()
+    
+    @property
+    def cmd_name(self) -> str:
+        if not self.__cmd_name:
+            return "None"
+        return self.__cmd_name
+    
+    @cmd_name.setter
+    def cmd_name(self, name: str):
+        self.__cmd_name = name    
+        
+
 class Command(ABC):
     def __init__(
         self, 
         name: str, 
         description: str,
-        execute_args_description: Dict[str, str],
+        state_list: List[RobotState] = [],
+        execute_args_description: Dict[str, str] = {},
         execute_required_known_arguments: List[str] = [],
     ) -> None:
         self.__name: str = name
         self.__description: str = description
+        self.__state_list: List[RobotState] = state_list
         self.__execute_args_description: Dict[str, str] = execute_args_description
         self.__execute_required_known_args: List[str] = execute_required_known_arguments
         
@@ -51,6 +82,10 @@ class Command(ABC):
             
         return f'"{cmd_name}":, args:{args_str}  # {cmd_description} {required_args_str}'
     
+    def get_status_list(self):
+        return self.__state_list
+    
+    
     @property
     def required_known_arguments(self) -> list[str]:
         return self.__execute_required_known_args
@@ -81,29 +116,5 @@ class Command(ABC):
         return [param.name for param in signature.parameters.values() if param.name != 'self']
     
 
-class CommandExecutionResult():
-    def __init__(
-        self,
-        status: Literal["success", "failure"], 
-        details: str = ""
-    ) -> None:
-        self.cmd_name = ""
-        self.cmd_args: Dict[str, str] = {}
-        self.status: Literal['success', 'failure'] = status
-        self.details: str = details
 
-    def __str__(self) -> str:
-        return f"[{self.cmd_name}] status: {self.status}"
-    
-    def __repr__(self) -> str:
-        return self.__str__()
-    
-    @property
-    def cmd_name(self) -> str:
-        if not self.__cmd_name:
-            return "None"
-        return self.__cmd_name
-    
-    @cmd_name.setter
-    def cmd_name(self, name: str):
-        self.__cmd_name = name    
+__all__ = ["Command", "CommandExecutionResult", "StateChange"]
